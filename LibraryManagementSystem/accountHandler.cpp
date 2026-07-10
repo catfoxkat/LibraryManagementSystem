@@ -2,6 +2,7 @@
 #include<string>
 #include"inputListener.h"
 #include"accountHandler.h"
+#include"fileHandler.h"
 
 using std::cout;
 using std::endl;
@@ -16,8 +17,6 @@ bool validateAccountLogin(string username, string password) {
 }
 
 void accountHandler::registerFunction() {
-
-
 	system("cls");
 
 	//inputusr:
@@ -34,6 +33,7 @@ void accountHandler::registerFunction() {
 	if (!(password == confirmPassword)) { cout << "Passwords do not match!\n\n"; goto inputpwd; }
 
 	cout << "REGISTER ACCOUNT WITH USERNAME OF " << username << " AND PASSWORD OF " << password << endl;
+	fileHandler().appendNewAccount(username, password);
 }
 
 void accountHandler::loginFunction() {

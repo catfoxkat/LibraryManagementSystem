@@ -2,12 +2,10 @@
 
 #include<string>
 
-using std::string;
-
 int listenForInt();
 
 char listenForChar();
 
-string listenForString();
+std::string listenForString();
 
-bool promptYesNo(string message);
+bool promptYesNo(std::string message);

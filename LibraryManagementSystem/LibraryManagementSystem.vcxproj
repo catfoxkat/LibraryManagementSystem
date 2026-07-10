@@ -141,6 +141,7 @@
   <ItemGroup>
     <ClCompile Include="accountHandler.h" />
     <ClCompile Include="accountHandler.cpp" />
+    <ClCompile Include="fileHandler.cpp" />
     <ClCompile Include="inputListener.cpp" />
     <ClCompile Include="inputListener.h" />
     <ClCompile Include="main.cpp" />

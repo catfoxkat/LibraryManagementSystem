@@ -2,17 +2,15 @@
 
 #include<string>
 
-using std::string;
-
 class menu {
 public:
-	void SetTitle(string title);
+	void SetTitle(std::string title);
 
-	void AppendNav(string navText);
+	void AppendNav(std::string navText);
 
 	void DisplayPage();
 private:
-	string PageTitle;
-	string PageNav = "";
+	std::string PageTitle;
+	std::string PageNav = "";
 	int PageNavIndex = 1;
 };

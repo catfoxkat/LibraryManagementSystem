@@ -3,6 +3,7 @@
 #include"menu.h"
 #include"inputListener.h"
 #include"accountHandler.h"
+#include"fileHandler.h"
 
 using std::cout;
 
@@ -11,6 +12,9 @@ account currentUser;
 bool loggedIn;
 
 int main() {
+	fileHandler().initializeFiles();
+	std::cin.ignore();
+
 	menu NewMenu;
 	NewMenu.SetTitle("Welcome to the library of [name here]!");
 	NewMenu.AppendNav("Login");
