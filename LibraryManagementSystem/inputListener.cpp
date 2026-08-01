@@ -20,10 +20,17 @@ std::map<int, int> keyToInt = {
 			{57, 9}
 };
 
+void flushBuffer() { 
+	std::cin.clear();
+}
+
 int listenForInt() {
 	while (true) {
 		char key = _getch();
-		if (keyToInt[key]) { return keyToInt[key]; }
+		if (keyToInt[key]) { 
+			flushBuffer();
+			return keyToInt[key]; 
+		}
 	}
 }
 
@@ -34,6 +41,7 @@ char listenForChar() {
 string listenForString() {
 	string text;
 	getline(cin, text);
+	flushBuffer();
 	return text;
 }
 
@@ -43,9 +51,11 @@ bool promptYesNo(string message) {
 	while (true) {
 		letter = listenForChar();
 		if (letter == 'y') {
+			flushBuffer();
 			return true;
 		}
 		else if (letter == 'n') {
+			flushBuffer();
 			return false;
 		}
 	}

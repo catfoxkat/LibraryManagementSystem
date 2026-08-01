@@ -10,6 +10,7 @@ using std::cout;
 using std::ifstream;
 using std::ofstream;
 using std::string;
+using std::vector;
 
 const fs::path CURRENT_DIRECTORY = fs::current_path();
 const fs::path ACCOUNTS_PATH = CURRENT_DIRECTORY / "accounts.txt";
@@ -17,6 +18,8 @@ const fs::path BOOKS_PATH = CURRENT_DIRECTORY / "books.txt";
 //std::FILE Accounts;
 //std::FILE Books;
 //fs::file
+
+const string Delimiter = ", ";
 
 
 void fileHandler::initializeFiles() {
@@ -46,6 +49,45 @@ void fileHandler::initializeFiles() {
 
 void fileHandler::appendNewAccount(string username, string password) {
 	ofstream accounts; accounts.open(ACCOUNTS_PATH, std::ios_base::app);
-	accounts << username + ", " + password + "\n";  //unsure if ", " should be used as a seperator. structure exp?: "[USR], [PWD], [PERMISSIONLVL]\n" 
+	accounts << username + Delimiter + password + ", 0" + "\n";  //unsure if ", " should be used as a seperator. structure exp?: "[USR], [PWD], [PERMISSIONLVL]\n" 
 	accounts.close();
+}
+
+
+
+vector<string> splitByDelimiter(string& str, string delimiter) {
+	vector<string> splitString;
+	size_t pos = 0;
+	string token;
+	while ((pos = str.find(delimiter)) != string::npos) {
+		token = str.substr(0, pos);
+		splitString.push_back(token);
+		str.erase(0, pos + delimiter.length());
+	}
+	splitString.push_back(str);
+	return splitString;
+}
+
+account fileHandler::getAccountByName(string username) {
+	ifstream accounts(ACCOUNTS_PATH, std::ios::out);
+	string line;
+	while (std::getline(accounts, line)) {
+		cout << line << std::endl;
+
+		vector<string> Row = splitByDelimiter(line, Delimiter);
+		if (Row.size() < 3) {
+			cout << "Invalid account format, skipping..." << std::endl << std::endl;
+			continue;
+		}
+		cout << "Username: " << Row[0] << std::endl;
+		cout << "Password: " << Row[1] << std::endl;
+		cout << "Role: " << Row[2] << std::endl << std::endl;
+		
+	}
+
+	return account();
+}
+
+bool fileHandler::validateAccount(string username, string password) {
+	return false;
 }

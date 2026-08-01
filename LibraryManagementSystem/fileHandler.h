@@ -8,5 +8,7 @@ class fileHandler {
 
 		void appendNewAccount(std::string username, std::string password);
 
-		account getAccount(std::string);
+		account getAccountByName(std::string username);
+
+		bool validateAccount(std::string username, std::string password);
 };

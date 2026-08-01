@@ -13,6 +13,7 @@ bool loggedIn;
 
 int main() {
 	fileHandler().initializeFiles();
+	fileHandler().getAccountByName("");
 	std::cin.ignore();
 
 	menu NewMenu;
@@ -40,7 +41,7 @@ int main() {
 				return 0;
 			default: continue;
 		}
-		std::cin.ignore();
+		
 		NewMenu.DisplayPage();
 	}
 	
