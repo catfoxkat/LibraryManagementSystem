@@ -67,8 +67,10 @@ void accountHandler::registerFunction() {
 	fileHandler().appendNewAccount(username, password);
 }
 
-void accountHandler::loginFunction() {
+void accountHandler::loginFunction(account* currentUser) {
+	LABEL_START_LOGIN_FUNCTION:
 	if (!promptYesNo("Continue to login? [y/n]\n")) {
+		*currentUser = account();
 		return;
 	}
 
@@ -81,5 +83,13 @@ void accountHandler::loginFunction() {
 	string password = listenForString();
 
 	cout << "LOGIN WITH USERNAME OF " << username << " AND PASSWORD OF " << password << endl;
-	validateAccountLogin(username, password);
+	if (validateAccountLogin(username, password)) {
+		cout << "LOGIN SUCCESS." << endl;
+		*currentUser = fileHandler().getAccountByName(username);
+		return;
+	}
+	else {
+		cout << "INVALID USERNAME OR PASSWORD" << endl;
+		goto LABEL_START_LOGIN_FUNCTION;
+	}
 }
