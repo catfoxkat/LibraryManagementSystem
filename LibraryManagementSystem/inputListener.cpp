@@ -27,7 +27,7 @@ void flushBuffer() {
 int listenForInt() {
 	while (true) {
 		char key = _getch();
-		if (keyToInt[key]) { 
+		if (keyToInt.contains((int)key)) { 
 			flushBuffer();
 			return keyToInt[key]; 
 		}
