@@ -11,6 +11,7 @@ using std::ifstream;
 using std::ofstream;
 using std::string;
 using std::vector;
+using std::endl;
 
 const fs::path CURRENT_DIRECTORY = fs::current_path();
 const fs::path ACCOUNTS_PATH = CURRENT_DIRECTORY / "accounts.txt";
@@ -23,25 +24,26 @@ const string Delimiter = ", ";
 
 
 void fileHandler::initializeFiles() {
-	cout << CURRENT_DIRECTORY << std::endl;
-	cout << ACCOUNTS_PATH << std::endl;
-	cout << BOOKS_PATH << std::endl;
-	cout << "Init Accounts\n";
+	cout << "FILEHANDLER" << endl;
+	cout << "CURRENT DIRECTORY: \t" << CURRENT_DIRECTORY << endl;
+	cout << "ACCOUNTS FILEPATH: \t" << ACCOUNTS_PATH << endl;
+	cout << "BOOKS FILEPATH: \t" << BOOKS_PATH << endl;
+	cout << "Initialize Accounts file\n";
 
 	if (fs::exists(ACCOUNTS_PATH))
-		cout << "accounts.txt already exists.\n";
+		cout << "\t- accounts.txt already exists.\n";
 	else {
-		cout << "accounts.txt does not exist, creating new file.\n";
+		cout << "\t- accounts.txt does not exist, creating new file.\n";
 		ofstream accounts("accounts.txt");
 		accounts.close();
 	}
 
-	cout << "Init Books\n";
+	cout << "Initialize Books file\n";
 
 	if (fs::exists(BOOKS_PATH))
-		cout << "books.txt already exists.\n";
+		cout << "\t- books.txt already exists.\n";
 	else {
-		cout << "books.txt does not exist, creating new file.\n";
+		cout << "\t- books.txt does not exist, creating new file.\n";
 		ofstream books("books.txt");
 		books.close();
 	}
@@ -68,26 +70,40 @@ vector<string> splitByDelimiter(string& str, string delimiter) {
 	return splitString;
 }
 
-account fileHandler::getAccountByName(string username) {
+account fileHandler::getAccountByName(string username) { //name pass role
 	ifstream accounts(ACCOUNTS_PATH, std::ios::out);
 	string line;
 	while (std::getline(accounts, line)) {
-		cout << line << std::endl;
-
 		vector<string> Row = splitByDelimiter(line, Delimiter);
 		if (Row.size() < 3) {
-			cout << "Invalid account format, skipping..." << std::endl << std::endl;
+			cout << "Invalid account format, skipping..." << endl << endl;
 			continue;
 		}
-		cout << "Username: " << Row[0] << std::endl;
-		cout << "Password: " << Row[1] << std::endl;
-		cout << "Role: " << Row[2] << std::endl << std::endl;
-		
+		if (Row[0] == username) {
+			account givenAcc;
+			givenAcc.exists = true;
+			givenAcc.permissionLevel = stoi(Row[2]);
+			givenAcc.username = Row[0];
+			return givenAcc;
+		}
 	}
 
-	return account();
+	return account(); //return default exists? false
 }
 
 bool fileHandler::validateAccount(string username, string password) {
+	ifstream accounts(ACCOUNTS_PATH, std::ios::out);
+	string line;
+	while (std::getline(accounts, line)) {
+		vector<string> Row = splitByDelimiter(line, Delimiter);
+		if (Row.size() < 3) {
+			cout << "Invalid account format, skipping..." << endl << endl;
+			continue;
+		}
+		if (Row[0] == username && Row[1] == password) {
+			return true;
+		}
+	}
+
 	return false;
 }

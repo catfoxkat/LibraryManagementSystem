@@ -1,5 +1,6 @@
 #pragma once
 
+#include<vector>
 #include"accountHandler.h"
 
 class fileHandler {
@@ -11,4 +12,8 @@ class fileHandler {
 		account getAccountByName(std::string username);
 
 		bool validateAccount(std::string username, std::string password);
+
+		std::vector<std::string> getBookNames();
+
+
 };
