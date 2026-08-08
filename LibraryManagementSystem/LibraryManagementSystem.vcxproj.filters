@@ -36,12 +36,18 @@
     <ClCompile Include="fileHandler.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="bookHandler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="menu.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="fileHandler.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="bookHandler.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
