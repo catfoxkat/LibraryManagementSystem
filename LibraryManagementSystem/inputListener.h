@@ -1,4 +1,5 @@
-#pragma once
+#ifndef INPUTLISTENER_H_
+#define INPUTLISTENER_H_
 
 #include<string>
 
@@ -9,3 +10,5 @@ char listenForChar();
 std::string listenForString();
 
 bool promptYesNo(std::string message);
+
+#endif // INPUTLISTENER_H_

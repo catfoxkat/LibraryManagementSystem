@@ -4,6 +4,7 @@
 #include"inputListener.h"
 #include"accountHandler.h"
 #include"fileHandler.h"
+#include"bookHandler.h"
 
 using std::cout;
 using std::endl;
@@ -11,6 +12,8 @@ using std::endl;
 accountHandler AccountHandler;
 account currentUser;
 bool guest;
+
+bookHandler BookHandler;
 
 int main() {
 	fileHandler().initializeFiles();
@@ -83,6 +86,13 @@ int main() {
 				guest = false;
 				currentUser = account();
 				goto LABEL_START_MENU;
+
+			case 1:
+				cout << "BROWSE";
+				BookHandler.openInterface();
+				break;
+
+			default: continue;
 		}
 		cout << "left case";
 		Menu_1.DisplayPage();

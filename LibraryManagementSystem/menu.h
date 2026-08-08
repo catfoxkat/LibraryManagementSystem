@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MENU_H_
+#define MENU_H_
 
 #include<string>
 
@@ -17,3 +18,5 @@ private:
 	std::string PageNav = "";
 	int PageNavIndex = 1;
 };
+
+#endif MENU_H_

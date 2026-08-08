@@ -1,3 +1,6 @@
+#ifndef BOOKHANDLER_H_
+#define BOOKHANDLER_H_
+
 #include"inputListener.h"
 #include"fileHandler.h"
 #include"menu.h"
@@ -15,7 +18,6 @@ class book {
 public:
 	std::string title;
 	std::string author;
-	std::string description;
 	std::string genre;
 	std::string language;
 	std::string ISBN;
@@ -24,3 +26,5 @@ public:
 	int available;
 	int borrowed;
 };
+
+#endif // BOOKHANDLER_H_

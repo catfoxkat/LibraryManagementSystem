@@ -1,4 +1,5 @@
-#pragma once
+#ifndef ACCOUNTHANDLER_H_
+#define ACCOUNTHANDLER_H_
 
 #include<string>
 
@@ -14,3 +15,5 @@ public:
 
 	void loginFunction(account* currentUser);
 };
+
+#endif // ACCOUNTHANDLER_H_

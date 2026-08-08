@@ -21,6 +21,7 @@ const fs::path BOOKS_PATH = CURRENT_DIRECTORY / "books.txt";
 //fs::file
 
 const string Delimiter = ", ";
+const char BookDelimiter = '|';
 
 
 void fileHandler::initializeFiles() {
@@ -55,7 +56,23 @@ void fileHandler::appendNewAccount(string username, string password) {
 	accounts.close();
 }
 
+void fileHandler::appendNewBook(book newBook)
+{
+	ofstream booksFile;
 
+	booksFile.open(BOOKS_PATH, std::ios_base::app);
+
+	booksFile
+		<< newBook.ISBN << BookDelimiter
+		<< newBook.title << BookDelimiter
+		<< newBook.genre << BookDelimiter
+		<< newBook.author << BookDelimiter
+		<< newBook.language << BookDelimiter
+		<< newBook.pageCount
+		<< "\n";
+
+	booksFile.close();
+}
 
 vector<string> splitByDelimiter(string& str, string delimiter) {
 	vector<string> splitString;
