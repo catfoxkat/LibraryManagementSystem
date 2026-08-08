@@ -32,6 +32,9 @@ bool validString(string str) { //checks if string has invalid chars (restricted 
 }
 
 void accountHandler::registerFunction() {
+	if (!promptYesNo("Continue to registration? [y/n]\n")) {
+		return;
+	}
 	system("cls");
 
 	inputusr:
