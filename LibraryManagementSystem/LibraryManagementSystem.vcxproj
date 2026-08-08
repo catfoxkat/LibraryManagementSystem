@@ -139,19 +139,7 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="accountHandler.h" />
-    <ClCompile Include="accountHandler.cpp" />
-    <ClCompile Include="bookHandler.cpp" />
-    <ClCompile Include="fileHandler.cpp" />
-    <ClCompile Include="inputListener.cpp" />
-    <ClCompile Include="inputListener.h" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="menu.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="bookHandler.h" />
-    <ClInclude Include="fileHandler.h" />
-    <ClInclude Include="menu.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -363,3 +363,13 @@ MigrationBackup/
 FodyWeavers.xsd
 /LibraryManagementSystem/accounts.txt
 /LibraryManagementSystem/books.txt
+/LibraryManagementSystem/accountHandler.cpp
+/LibraryManagementSystem/accountHandler.h
+/LibraryManagementSystem/bookHandler.cpp
+/LibraryManagementSystem/bookHandler.h
+/LibraryManagementSystem/fileHandler.cpp
+/LibraryManagementSystem/fileHandler.h
+/LibraryManagementSystem/inputListener.cpp
+/LibraryManagementSystem/inputListener.h
+/LibraryManagementSystem/menu.cpp
+/LibraryManagementSystem/menu.h
