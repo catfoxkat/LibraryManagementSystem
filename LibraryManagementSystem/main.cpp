@@ -2,7 +2,7 @@
 #include<string>
 #include<filesystem>
 #include<fstream>
-#include<conio.h>
+#include<conio.h> //for inputListener getch
 #include<map>
 
 namespace fs = std::filesystem;
@@ -29,6 +29,8 @@ std::map<int, int> keyToInt = {
 			{57, 9}
 };
 
+//----------------------------------------------------------------------------------------------------------
+
 struct account {
 	std::string username;
 	int permissionLevel = 0; //-1 guest, 0 user, 1 staff
@@ -42,6 +44,8 @@ public:
 	void loginFunction();
 };
 
+//----------------------------------------------------------------------------------------------------------
+
 class book {
 public:
 	std::string title;
@@ -50,9 +54,9 @@ public:
 	std::string language;
 	std::string ISBN;
 
-	int pageCount;
-	int available;
-	int borrowed;
+	int pageCount = 0;
+	int available = 0; //how many available to borrow
+	int borrowed = 0; //how many currently borrowed
 };
 void addBook();
 void removeBook();
@@ -60,6 +64,8 @@ void editBook();
 void searchBook();
 void sortBook();
 void bookInterface();
+
+//----------------------------------------------------------------------------------------------------------
 
 class fileHandler {
 public:
@@ -71,12 +77,19 @@ public:
 
 	account getAccountByName(std::string username);
 
+	book getBookByISBN(string ISBN);
+
+	void removeBook(string ISBN);
+
 	bool validateAccount(std::string username, std::string password);
 
 	std::vector<std::string> getBookNames();
 
-
+private:
+	vector<string> splitByDelimiter(string str, string delimiter);
 };
+
+//----------------------------------------------------------------------------------------------------------
 
 int listenForInt();
 
@@ -85,6 +98,8 @@ char listenForChar();
 string listenForString();
 
 bool promptYesNo(std::string message);
+
+//----------------------------------------------------------------------------------------------------------
 
 class menu {
 public:
@@ -102,6 +117,8 @@ private:
 	int PageNavIndex = 1;
 };
 
+//----------------------------------------------------------------------------------------------------------
+
 accountHandler AccountHandler;
 account currentUser;
 bool guest;
@@ -111,7 +128,7 @@ const fs::path ACCOUNTS_PATH = CURRENT_DIRECTORY / "accounts.txt";
 const fs::path BOOKS_PATH = CURRENT_DIRECTORY / "books.txt";
 
 const string Delimiter = ", ";
-const char BookDelimiter = '|';
+const string BookDelimiter = "|";
 
 int main() {
 	fileHandler().initializeFiles();
@@ -124,7 +141,7 @@ int main() {
 	Menu_Main.AppendNav("Login");
 	Menu_Main.AppendNav("Register");
 	Menu_Main.AppendNav("Browse as guest");
-	Menu_Main.AppendNav("Quit");
+	Menu_Main.AppendNav("Quit", 0);
 	Menu_Main.DisplayPage();
 
 	while (true) {
@@ -198,6 +215,8 @@ int main() {
 
 	return 0;
 }
+
+//----------------------------------------------------------------------------------------------------------
 
 bool validateAccountLogin(string username, string password) {
 	return fileHandler().validateAccount(username, password);
@@ -288,9 +307,14 @@ LABEL_START_LOGIN_FUNCTION:
 	}
 }
 
+//----------------------------------------------------------------------------------------------------------
+
 void bookInterface() {
 	menu bookMenu;
 	bookMenu.SetTitle("Books");
+	bookMenu.AppendNav("Add book");
+	bookMenu.AppendNav("Remove book");
+	bookMenu.AppendNav("Exit", 0);
 
 	LABEL_BOOK_MENU:
 	while (true) {
@@ -299,10 +323,16 @@ void bookInterface() {
 		case 1:
 			addBook();
 			break;
+		case 2:
+			removeBook();
+			cout << "Removed";
+			cin.ignore();
+			break;
+		case 0:
+			return;
 		}
 	}
 }
-
 
 void addBook() {
 	book newBook;
@@ -331,6 +361,12 @@ void addBook() {
 	cin.ignore();
 };
 
+void removeBook() {
+	cout << "Enter ISBN of book to remove: ";
+	fileHandler().removeBook(listenForString());
+}
+
+//----------------------------------------------------------------------------------------------------------
 void fileHandler::initializeFiles() {
 	cout << "FILEHANDLER" << endl;
 	cout << "CURRENT DIRECTORY: \t" << CURRENT_DIRECTORY << endl;
@@ -359,7 +395,7 @@ void fileHandler::initializeFiles() {
 
 void fileHandler::appendNewAccount(string username, string password) {
 	ofstream accounts; accounts.open(ACCOUNTS_PATH, std::ios_base::app);
-	accounts << username + Delimiter + password + ", 0" + "\n";  //unsure if ", " should be used as a seperator. structure exp?: "[USR], [PWD], [PERMISSIONLVL]\n" 
+	accounts << username << Delimiter << password << ", 0" << endl;  //unsure if ", " should be used as a seperator. structure exp?: "[USR], [PWD], [PERMISSIONLVL]\n" 
 	accounts.close();
 }
 
@@ -376,12 +412,12 @@ void fileHandler::appendNewBook(book newBook)
 		<< newBook.author << BookDelimiter
 		<< newBook.language << BookDelimiter
 		<< newBook.pageCount
-		<< "\n";
+		<< endl;
 
 	booksFile.close();
 }
 
-vector<string> splitByDelimiter(string& str, string delimiter) {
+vector<string> fileHandler::splitByDelimiter(string str, string delimiter) {
 	vector<string> splitString;
 	size_t pos = 0;
 	string token;
@@ -395,7 +431,7 @@ vector<string> splitByDelimiter(string& str, string delimiter) {
 }
 
 account fileHandler::getAccountByName(string username) { //name pass role
-	ifstream accounts(ACCOUNTS_PATH, std::ios::out);
+	ifstream accounts(ACCOUNTS_PATH, std::ios::in);
 	string line;
 	while (std::getline(accounts, line)) {
 		vector<string> Row = splitByDelimiter(line, Delimiter);
@@ -415,8 +451,38 @@ account fileHandler::getAccountByName(string username) { //name pass role
 	return account(); //return default exists? false
 }
 
+book fileHandler::getBookByISBN(string ISBN) {
+	return book();
+}
+
+void fileHandler::removeBook(string ISBN) { //remove line with the matched ISBN
+	ifstream books(BOOKS_PATH, std::ios::in);
+	ofstream newBooks;
+	newBooks.open("temp.txt");
+	string line;
+	while (std::getline(books, line)) {
+		cout << "next line" << endl;
+		vector<string> Row = splitByDelimiter(line, BookDelimiter);
+		cout << "[ISBN] [ROW[0]]\n" << ISBN << " | " << Row[0] << endl;
+		if (Row[0] != ISBN) {
+			cout << "copy line" << line << endl;
+			
+			newBooks << line << endl;
+		}
+		else {
+			cout << "Skip this." << endl;
+		}
+	}
+
+	newBooks.close();
+	books.close();
+
+	remove("books.txt");
+	rename("temp.txt", fs::current_path() / "books.txt");
+}
+
 bool fileHandler::validateAccount(string username, string password) {
-	ifstream accounts(ACCOUNTS_PATH, std::ios::out);
+	ifstream accounts(ACCOUNTS_PATH, std::ios::in);
 	string line;
 	while (std::getline(accounts, line)) {
 		vector<string> Row = splitByDelimiter(line, Delimiter);
@@ -431,6 +497,8 @@ bool fileHandler::validateAccount(string username, string password) {
 
 	return false;
 }
+
+//----------------------------------------------------------------------------------------------------------
 
 int listenForInt() {
 	while (true) {
@@ -468,6 +536,8 @@ bool promptYesNo(string message) {
 		}
 	}
 }
+
+//----------------------------------------------------------------------------------------------------------
 
 void menu::SetTitle(string title) {
 	PageTitle = title;
