@@ -9,12 +9,13 @@ namespace fs = std::filesystem;
 
 using std::cout;
 using std::cin;
-using std::endl;
 using std::string;
 using std::ifstream;
 using std::ofstream;
-using std::string;
 using std::vector;
+using std::endl;
+using std::to_string;
+using std::getline;
 
 std::map<int, int> keyToInt = {
 			{48, 0},
@@ -32,7 +33,7 @@ std::map<int, int> keyToInt = {
 //----------------------------------------------------------------------------------------------------------
 
 struct account {
-	std::string username;
+	string username;
 	int permissionLevel = 0; //-1 guest, 0 user, 1 staff
 	bool exists = false;
 };
@@ -48,11 +49,11 @@ public:
 
 class book {
 public:
-	std::string title;
-	std::string author;
-	std::string genre;
-	std::string language;
-	std::string ISBN;
+	string title;
+	string author;
+	string genre;
+	string language;
+	string ISBN;
 
 	int pageCount = 0;
 	int available = 0; //how many available to borrow
@@ -64,26 +65,26 @@ void editBook();
 void searchBook();
 void sortBook();
 void bookInterface();
-
+void bookSearchSubInterface();
 //----------------------------------------------------------------------------------------------------------
 
 class fileHandler {
 public:
 	void initializeFiles();
 
-	void appendNewAccount(std::string username, std::string password);
+	void appendNewAccount(string username, string password);
 
 	void appendNewBook(book newBook);
 
-	account getAccountByName(std::string username);
+	account getAccountByName(string username);
 
 	book getBookByISBN(string ISBN);
 
 	void removeBook(string ISBN);
 
-	bool validateAccount(std::string username, std::string password);
+	bool validateAccount(string username, string password);
 
-	std::vector<std::string> getBookNames();
+	vector<string> getBookNames();
 
 private:
 	vector<string> splitByDelimiter(string str, string delimiter);
@@ -97,25 +98,36 @@ char listenForChar();
 
 string listenForString();
 
-bool promptYesNo(std::string message);
+bool promptYesNo(string message);
 
 //----------------------------------------------------------------------------------------------------------
 
 class menu {
 public:
-	void SetTitle(std::string title);
+	void SetTitle(string title);
 
-	void SetDescription(std::string title);
+	void SetDescription(string title);
 
-	void AppendNav(std::string navText, int overwriteIndex = -1);
+	void AppendNav(string navText, int overwriteIndex = -1);
 
 	void DisplayPage();
 private:
-	std::string PageTitle;
-	std::string PageDesc;
-	std::string PageNav = "";
+	string PageTitle;
+	string PageDesc;
+	string PageNav = "";
 	int PageNavIndex = 1;
 };
+
+//----------------------------------------------------------------------------------------------------------
+
+void initMenu_Main();
+void initMenu_Main_Logged();
+void initBookMenu();
+void initBookSearchMenu();
+menu Menu_Main;
+menu Menu_Main_Logged;
+menu bookMenu;
+menu bookSearchMenu;
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -132,19 +144,14 @@ const string BookDelimiter = "|";
 
 int main() {
 	fileHandler().initializeFiles();
-
-	std::cin.ignore();
-
+	initMenu_Main();
+	
+	cin.ignore();
+	
+	
 	LABEL_START_MENU:
-	menu Menu_Main;
-	Menu_Main.SetTitle("Welcome to the library of [name here]!");
-	Menu_Main.AppendNav("Login");
-	Menu_Main.AppendNav("Register");
-	Menu_Main.AppendNav("Browse as guest");
-	Menu_Main.AppendNav("Quit", 0);
-	Menu_Main.DisplayPage();
-
 	while (true) {
+		Menu_Main.DisplayPage();
 		switch (listenForInt()) {
 			case 1:
 				cout << "entering login function";
@@ -155,7 +162,7 @@ int main() {
 				else {
 					cout << "im not in :(" << endl;
 				}
-				std::cin.ignore();
+				cin.ignore();
 				break;
 			case 2:
 				cout << "entering register function";
@@ -166,7 +173,7 @@ int main() {
 				currentUser.username = "Guest";
 				currentUser.permissionLevel = -1;
 				break;
-			case 4:
+			case 0:
 				return 0;
 			default: continue;
 		}
@@ -174,26 +181,14 @@ int main() {
 		if (currentUser.exists || guest) {
 			break;
 		}
-
-		Menu_Main.DisplayPage();
 	}
-	
-	menu Menu_1;
-	Menu_1.SetTitle("Hello, " + currentUser.username + "!");
-	Menu_1.SetDescription("Permission level: " + std::to_string(currentUser.permissionLevel) + "\n");
-	
-	Menu_1.AppendNav("Browse books");
-	Menu_1.AppendNav("Facility booking");
-	Menu_1.AppendNav("Feedback");
-	if (currentUser.permissionLevel == 1) {
-		Menu_1.AppendNav("Modify books");
-		Menu_1.AppendNav("Manage users");
-		Menu_1.AppendNav("Analysis");
-	}
-	Menu_1.AppendNav("Log out", 0);
-	Menu_1.DisplayPage();
+	// LOGGED IN
+	initMenu_Main_Logged();
+	initBookSearchMenu();
+	initBookMenu();
 
 	while (true) {
+		Menu_Main_Logged.DisplayPage();
 		switch (listenForInt()) {
 			cout << "waiting";
 			case 0:
@@ -206,15 +201,77 @@ int main() {
 				cout << "BROWSE";
 				bookInterface();
 				break;
-
+			case 2:
+				cout << "FACILITY BOOKING";
+				break;
+			case 3:
+				cout << "FEEDBACK";
+				break;
+			case 4:
+				if (currentUser.permissionLevel != 1) { break; }
+				break;
+			case 5:
+				if (currentUser.permissionLevel != 1) { break; }
+				break;
+			case 6:
+				if (currentUser.permissionLevel != 1) { break; }
+				break;
+			
 			default: continue;
 		}
-		cout << "left case";
-		Menu_1.DisplayPage();
 	}
 
 	return 0;
 }
+
+void initMenu_Main() {
+	Menu_Main = menu();
+	Menu_Main.SetTitle("Welcome to the library of [name here]!");
+	Menu_Main.AppendNav("Login");
+	Menu_Main.AppendNav("Register");
+	Menu_Main.AppendNav("Browse as guest");
+	Menu_Main.AppendNav("Quit", 0);
+}
+
+void initMenu_Main_Logged() {
+	Menu_Main_Logged = menu();
+	Menu_Main_Logged.SetTitle("Hello, " + currentUser.username + "!");
+	Menu_Main_Logged.SetDescription("Permission level: " + to_string(currentUser.permissionLevel) + "\n");
+
+	Menu_Main_Logged.AppendNav("Browse books");
+	Menu_Main_Logged.AppendNav("Facility booking");
+	Menu_Main_Logged.AppendNav("Feedback");
+	if (currentUser.permissionLevel == 1) {
+		Menu_Main_Logged.AppendNav("Modify books");
+		Menu_Main_Logged.AppendNav("Manage users");
+		Menu_Main_Logged.AppendNav("Analysis");
+	}
+	Menu_Main_Logged.AppendNav("Log out", 0);
+}
+
+void initBookMenu() {
+	bookMenu = menu();
+	bookMenu.SetTitle("Books");
+	bookMenu.AppendNav("Search book");
+	if (currentUser.permissionLevel == 1) {
+		bookMenu.AppendNav("Add book");
+		bookMenu.AppendNav("Remove book");
+	}
+	bookMenu.AppendNav("Exit", 0);
+}
+
+void initBookSearchMenu() {
+	bookSearchMenu = menu();
+	bookSearchMenu.SetTitle("Search book");
+	bookSearchMenu.AppendNav("Display all books");
+	bookSearchMenu.AppendNav("By ISBN");
+	bookSearchMenu.AppendNav("By Title");
+	bookSearchMenu.AppendNav("By Genre");
+	bookSearchMenu.AppendNav("By Author");
+	bookSearchMenu.AppendNav("By Language");
+	bookSearchMenu.AppendNav("Exit", 0);
+}
+
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -310,20 +367,19 @@ LABEL_START_LOGIN_FUNCTION:
 //----------------------------------------------------------------------------------------------------------
 
 void bookInterface() {
-	menu bookMenu;
-	bookMenu.SetTitle("Books");
-	bookMenu.AppendNav("Add book");
-	bookMenu.AppendNav("Remove book");
-	bookMenu.AppendNav("Exit", 0);
-
-	LABEL_BOOK_MENU:
+	//LABEL_BOOK_MENU:
 	while (true) {
 		bookMenu.DisplayPage();
 		switch (listenForInt()) {
 		case 1:
-			addBook();
+			bookSearchSubInterface();
 			break;
 		case 2:
+			if (currentUser.permissionLevel != 1) { break; }
+			addBook();
+			break;
+		case 3:
+			if (currentUser.permissionLevel != 1) { break; }
 			removeBook();
 			cout << "Removed";
 			cin.ignore();
@@ -332,6 +388,40 @@ void bookInterface() {
 			return;
 		}
 	}
+}
+
+void bookSearchSubInterface() {
+	while (true) {
+		bookSearchMenu.DisplayPage();
+		switch (listenForInt()) {
+		case 1:
+			cout << "Diplay all";
+			break;
+		case 2:
+			cout << "Search by ISBN";
+			break;
+		case 3:
+			cout << "Search by Title";
+			break;
+		case 4:
+			cout << "Search by Genre";
+			break;
+		case 5:
+			cout << "Search by Author";
+			break;
+		case 6:
+			cout << "Search by Language";
+			break;
+		case 0:
+			return;
+			break;
+		}
+		cout << "\nNext Loop";
+		cin.ignore();
+	}
+
+
+
 }
 
 void addBook() {
@@ -433,7 +523,7 @@ vector<string> fileHandler::splitByDelimiter(string str, string delimiter) {
 account fileHandler::getAccountByName(string username) { //name pass role
 	ifstream accounts(ACCOUNTS_PATH, std::ios::in);
 	string line;
-	while (std::getline(accounts, line)) {
+	while (getline(accounts, line)) {
 		vector<string> Row = splitByDelimiter(line, Delimiter);
 		if (Row.size() < 3) {
 			cout << "Invalid account format, skipping..." << endl << endl;
@@ -452,6 +542,21 @@ account fileHandler::getAccountByName(string username) { //name pass role
 }
 
 book fileHandler::getBookByISBN(string ISBN) {
+	ifstream books(BOOKS_PATH, std::ios::in);
+	string line;
+	book Book;
+	while (getline(books, line)) {
+		vector<string> Row = splitByDelimiter(line, BookDelimiter);
+		if (Row[0] != ISBN) {
+			Book.ISBN = ISBN;
+			Book.title = Row[1];
+			Book.genre = Row[2];
+			Book.author = Row[3];
+			Book.language = Row[4];
+			Book.pageCount = std::stoi(Row[5]);
+		}
+	}
+	books.close();
 	return book();
 }
 
@@ -461,16 +566,9 @@ void fileHandler::removeBook(string ISBN) { //remove line with the matched ISBN
 	newBooks.open("temp.txt");
 	string line;
 	while (std::getline(books, line)) {
-		cout << "next line" << endl;
 		vector<string> Row = splitByDelimiter(line, BookDelimiter);
-		cout << "[ISBN] [ROW[0]]\n" << ISBN << " | " << Row[0] << endl;
 		if (Row[0] != ISBN) {
-			cout << "copy line" << line << endl;
-			
 			newBooks << line << endl;
-		}
-		else {
-			cout << "Skip this." << endl;
 		}
 	}
 
@@ -484,7 +582,7 @@ void fileHandler::removeBook(string ISBN) { //remove line with the matched ISBN
 bool fileHandler::validateAccount(string username, string password) {
 	ifstream accounts(ACCOUNTS_PATH, std::ios::in);
 	string line;
-	while (std::getline(accounts, line)) {
+	while (getline(accounts, line)) {
 		vector<string> Row = splitByDelimiter(line, Delimiter);
 		if (Row.size() < 3) {
 			cout << "Invalid account format, skipping..." << endl << endl;
@@ -504,7 +602,7 @@ int listenForInt() {
 	while (true) {
 		char key = _getch();
 		if (keyToInt.contains((int)key)) {
-			std::cin.clear();
+			cin.clear();
 			return keyToInt[key];
 		}
 	}
@@ -517,21 +615,21 @@ char listenForChar() {
 string listenForString() {
 	string text;
 	getline(cin, text);
-	std::cin.clear();
+	cin.clear();
 	return text;
 }
 
 bool promptYesNo(string message) {
 	char letter;
-	std::cout << message;
+	cout << message;
 	while (true) {
 		letter = listenForChar();
 		if (letter == 'y') {
-			std::cin.clear();
+			cin.clear();
 			return true;
 		}
 		else if (letter == 'n') {
-			std::cin.clear();
+			cin.clear();
 			return false;
 		}
 	}
@@ -549,10 +647,10 @@ void menu::SetDescription(string desc) {
 
 void menu::AppendNav(string navText, int overwriteIndex) {
 	if (overwriteIndex != -1) {
-		PageNav.append("[" + std::to_string(overwriteIndex) + "] " + navText + "\n");
+		PageNav.append("[" + to_string(overwriteIndex) + "] " + navText + "\n");
 		return;
 	}
-	PageNav.append("[" + std::to_string(PageNavIndex) + "] " + navText + "\n");
+	PageNav.append("[" + to_string(PageNavIndex) + "] " + navText + "\n");
 	PageNavIndex++;
 }
 
