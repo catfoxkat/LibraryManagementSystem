@@ -1,4 +1,5 @@
 #include<iostream>
+#include<iomanip>
 #include<string>
 #include<filesystem>
 #include<fstream>
@@ -16,6 +17,10 @@ using std::vector;
 using std::endl;
 using std::to_string;
 using std::getline;
+using std::left;
+using std::right;
+using std::setw;
+using std::setfill;
 
 std::map<int, int> keyToInt = {
 			{48, 0},
@@ -66,6 +71,8 @@ void searchBook();
 void sortBook();
 void bookInterface();
 void bookSearchSubInterface();
+void displayAllBooks();
+
 //----------------------------------------------------------------------------------------------------------
 
 class fileHandler {
@@ -79,6 +86,8 @@ public:
 	account getAccountByName(string username);
 
 	book getBookByISBN(string ISBN);
+
+	vector<book> getAllBooks();
 
 	void removeBook(string ISBN);
 
@@ -131,7 +140,6 @@ menu bookSearchMenu;
 
 //----------------------------------------------------------------------------------------------------------
 
-accountHandler AccountHandler;
 account currentUser;
 bool guest;
 
@@ -155,7 +163,7 @@ int main() {
 		switch (listenForInt()) {
 			case 1:
 				cout << "entering login function";
-				AccountHandler.loginFunction();
+				accountHandler().loginFunction();
 				if (currentUser.exists) {
 					cout << "yay im in!" << endl;
 				}
@@ -166,7 +174,7 @@ int main() {
 				break;
 			case 2:
 				cout << "entering register function";
-				AccountHandler.registerFunction();
+				accountHandler().registerFunction();
 				break;
 			case 3:
 				guest = true;
@@ -236,7 +244,24 @@ void initMenu_Main() {
 void initMenu_Main_Logged() {
 	Menu_Main_Logged = menu();
 	Menu_Main_Logged.SetTitle("Hello, " + currentUser.username + "!");
-	Menu_Main_Logged.SetDescription("Permission level: " + to_string(currentUser.permissionLevel) + "\n");
+
+	string accountType;
+	switch (currentUser.permissionLevel) {
+	case -1:
+		accountType = "Guest";
+		break;
+	case 0:
+		accountType = "User";
+		break;
+	case 1:
+		accountType = "Administrator";
+		break;
+	default:
+		accountType = "Unknown";
+		break;
+	}
+
+	Menu_Main_Logged.SetDescription("Permission level: " + to_string(currentUser.permissionLevel) + " (" + accountType + ")\n");
 
 	Menu_Main_Logged.AppendNav("Browse books");
 	Menu_Main_Logged.AppendNav("Facility booking");
@@ -396,6 +421,7 @@ void bookSearchSubInterface() {
 		switch (listenForInt()) {
 		case 1:
 			cout << "Diplay all";
+			displayAllBooks();
 			break;
 		case 2:
 			cout << "Search by ISBN";
@@ -422,6 +448,41 @@ void bookSearchSubInterface() {
 
 
 
+}
+
+void displayAllBooks() {
+	system("CLS");
+	vector<book> Books = fileHandler().getAllBooks();
+	cout << left 
+		<< setw(13) << "ISBN"
+		<< " | "
+		<< setw(64) << "TITLE"
+		<< " | "
+		<< setw(16) << "GENRE"
+		<< " | "
+		<< setw(24) << "AUTHOR"
+		<< " | "
+		<< setw(10) << "LANGUAGE"
+		<< " | "
+		<< setw(4) << "PAGE";
+
+	for (int i = 0; i < Books.size(); i++) {
+		cout << endl;
+		cout << left
+			<< setw(13) << Books[i].ISBN.substr(0,13)
+			<< " | "
+			<< setw(64) << Books[i].title.substr(0, 64)
+			<< " | "
+			<< setw(16) << Books[i].genre.substr(0, 16)
+			<< " | "
+			<< setw(24) << Books[i].author.substr(0, 24)
+			<< " | "
+			<< setw(10) << Books[i].language.substr(0, 10)
+			<< " | "
+			<< setw(4) << to_string(Books[i].pageCount).substr(0, 4);
+	}
+	cout << setw(0);
+	cin.ignore();
 }
 
 void addBook() {
@@ -558,6 +619,25 @@ book fileHandler::getBookByISBN(string ISBN) {
 	}
 	books.close();
 	return book();
+}
+
+vector<book> fileHandler::getAllBooks() {
+	ifstream books(BOOKS_PATH, std::ios::in);
+	string line;
+	vector<book> array;
+	while (getline(books, line)) {
+		vector<string> Row = splitByDelimiter(line, BookDelimiter);
+		book Book;
+		Book.ISBN = Row[0];
+		Book.title = Row[1];
+		Book.genre = Row[2];
+		Book.author = Row[3];
+		Book.language = Row[4];
+		Book.pageCount = std::stoi(Row[5]);
+		array.push_back(Book);
+	}
+	books.close();
+	return array;
 }
 
 void fileHandler::removeBook(string ISBN) { //remove line with the matched ISBN
