@@ -5,6 +5,7 @@
 #include<fstream>
 #include<conio.h> //for inputListener getch
 #include<map>
+#include<vector>
 
 namespace fs = std::filesystem;
 
@@ -22,6 +23,7 @@ using std::right;
 using std::setw;
 using std::setfill;
 
+
 std::map<int, int> keyToInt = {
 			{48, 0},
 			{49, 1},
@@ -33,6 +35,15 @@ std::map<int, int> keyToInt = {
 			{55, 7},
 			{56, 8},
 			{57, 9}
+};
+
+enum bookProperty {
+	ISBN,
+	Title,
+	Author,
+	Genre,
+	Language,
+	PageCount
 };
 
 //----------------------------------------------------------------------------------------------------------
@@ -71,7 +82,10 @@ void searchBook();
 void sortBook();
 void bookInterface();
 void bookSearchSubInterface();
-void displayAllBooks();
+void displayAllBooks(bool sort = false, bookProperty BookProperty = ISBN);
+void displayBookMenuInterface();
+void sortBooksBy(vector<book>& books, bookProperty BookProperty);
+bookProperty selectBookProperty();
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -117,9 +131,9 @@ public:
 
 	void SetDescription(string title);
 
-	void AppendNav(string navText, int overwriteIndex = -1);
+	void AppendNav(string navText, int overwriteIndex = -1, char overwriteChar = '?');
 
-	void DisplayPage();
+	void DisplayPage(bool clearScreen = true);
 private:
 	string PageTitle;
 	string PageDesc;
@@ -133,10 +147,12 @@ void initMenu_Main();
 void initMenu_Main_Logged();
 void initBookMenu();
 void initBookSearchMenu();
+void initDisplayBookMenu();
 menu Menu_Main;
 menu Menu_Main_Logged;
 menu bookMenu;
 menu bookSearchMenu;
+menu displayBookMenu;
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -194,6 +210,7 @@ int main() {
 	initMenu_Main_Logged();
 	initBookSearchMenu();
 	initBookMenu();
+	initDisplayBookMenu();
 
 	while (true) {
 		Menu_Main_Logged.DisplayPage();
@@ -297,6 +314,13 @@ void initBookSearchMenu() {
 	bookSearchMenu.AppendNav("Exit", 0);
 }
 
+void initDisplayBookMenu() {
+	displayBookMenu = menu();
+	displayBookMenu.AppendNav("Sort", -1, 's');
+	displayBookMenu.AppendNav("Select", -1, 'x');
+	displayBookMenu.AppendNav("View selected", -1, 'v');
+	displayBookMenu.AppendNav("Quit", 0);
+}
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -421,7 +445,8 @@ void bookSearchSubInterface() {
 		switch (listenForInt()) {
 		case 1:
 			cout << "Diplay all";
-			displayAllBooks();
+			displayAllBooks(false);
+			displayBookMenuInterface();
 			break;
 		case 2:
 			cout << "Search by ISBN";
@@ -440,20 +465,21 @@ void bookSearchSubInterface() {
 			break;
 		case 0:
 			return;
-			break;
 		}
-		cout << "\nNext Loop";
-		cin.ignore();
 	}
 
 
 
 }
 
-void displayAllBooks() {
+void displayAllBooks(bool sort, bookProperty BookProperty) {
 	system("CLS");
 	vector<book> Books = fileHandler().getAllBooks();
+	if (sort) {
+		sortBooksBy(Books, BookProperty);
+	}
 	cout << left 
+		<< "      "
 		<< setw(13) << "ISBN"
 		<< " | "
 		<< setw(64) << "TITLE"
@@ -464,11 +490,15 @@ void displayAllBooks() {
 		<< " | "
 		<< setw(10) << "LANGUAGE"
 		<< " | "
-		<< setw(4) << "PAGE";
+		<< setw(4) << "PAGE"
+		<< endl;
+
 
 	for (int i = 0; i < Books.size(); i++) {
 		cout << endl;
-		cout << left
+		cout << right
+			<< "[" << setw(3) << i << "] "
+			<< left
 			<< setw(13) << Books[i].ISBN.substr(0,13)
 			<< " | "
 			<< setw(64) << Books[i].title.substr(0, 64)
@@ -482,30 +512,137 @@ void displayAllBooks() {
 			<< setw(4) << to_string(Books[i].pageCount).substr(0, 4);
 	}
 	cout << setw(0);
-	cin.ignore();
+}
+//displayBookMenu.AppendNav("Sort", -1, 's');
+//displayBookMenu.AppendNav("Select", -1, 'x');
+//displayBookMenu.AppendNav("View selected", -1, 'v');
+//displayBookMenu.AppendNav("Quit", 0);
+void displayBookMenuInterface() {
+	displayBookMenu.DisplayPage(false);
+	while (true) {
+		switch (listenForChar()) {
+		case 's':
+			cout << "Sort";
+			displayAllBooks(true, selectBookProperty());
+			displayBookMenu.DisplayPage(false);
+			break;
+		case 'x':
+			cout << "Select";
+			break;
+		case 'v':
+			cout << "View selected";
+			break;
+		case '0':
+			return;
+		default:
+			continue;
+		}
+	}
+}
+//ISBN,
+//Title,
+//Author,
+//Genre,
+//Language,
+//PageCount
+bookProperty selectBookProperty() {
+	cout << endl
+		<< "Select a property to sort by." << endl
+		<< "[1] ISBN" << endl
+		<< "[2] Title" << endl
+		<< "[3] Author" << endl
+		<< "[4] Genre" << endl
+		<< "[5] Language" << endl
+		<< "[6] Page Count" << endl;
+	SELECTBOOKPROPERTY_LABEL:
+	int num = listenForInt();
+	if (num > 6) {
+		goto SELECTBOOKPROPERTY_LABEL;
+	}
+	return bookProperty(num - 1);
+}
+
+bool hasOnlyInt(string str) {
+	for (int i = 0; i < str.length(); i++) {
+		if (!valueInRange((int)str[i], 48, 57)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool containsDelimiter(string str) {
+	for (int i = 0; i < str.length(); i++) {
+		if (str[i] == '|') {
+			return true;
+		}
+	}
+	return false;
 }
 
 void addBook() {
 	book newBook;
 
+	ADDBOOK_LABEL_ISBN:
 	cout << "Enter book ISBN: ";
-	newBook.ISBN = listenForString();
-	//cin.ignore();
+	string ISBN = listenForString();
+	if (!(ISBN.length() == 10 || ISBN.length() == 13)) {
+		cout << "INVALID ISBN, ISBN must be 10 (ISBN10) or 13 (ISBN13) numbers long." << endl;
+		goto ADDBOOK_LABEL_ISBN;
+	}
+	if (!hasOnlyInt(ISBN)) {
+		cout << "INVALID ISBN, ISBN cannot contain non numeric values." << endl;
+		goto ADDBOOK_LABEL_ISBN;
+	}
+	newBook.ISBN = ISBN;
+	
+	ADDBOOK_LABEL_TITLE:
 	cout << "Enter book title: ";
-	newBook.title = listenForString();
+	string TITLE = listenForString();
+	if (containsDelimiter(TITLE)) {
+		cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
+		goto ADDBOOK_LABEL_TITLE;
+	}
+	newBook.title = TITLE;
 
-	cout << "Enter book category: ";
-	newBook.genre = listenForString();
 
+	ADDBOOK_LABEL_GENRE:
+	cout << "Enter book genre: ";
+	string GENRE = listenForString();
+	if (containsDelimiter(GENRE)) {
+		cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
+		goto ADDBOOK_LABEL_GENRE;
+	}
+	newBook.genre = GENRE;
+
+	ADDBOOK_LABEL_AUTHOR:
 	cout << "Enter book author: ";
-	newBook.author = listenForString();
+	string AUTHOR = listenForString();
+	if (containsDelimiter(AUTHOR)) {
+		cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
+		goto ADDBOOK_LABEL_AUTHOR;
+	}
+	newBook.author = AUTHOR;
 
+	ADDBOOK_LABEL_LANGUAGE:
 	cout << "Enter book language: ";
-	newBook.language = listenForString();
+	string LANGUAGE = listenForString();
+	if (containsDelimiter(LANGUAGE)) {
+		cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
+		goto ADDBOOK_LABEL_LANGUAGE;
+	}
+	newBook.language = LANGUAGE;
 
+	ADDBOOK_LABEL_PAGECOUNT:
 	cout << "Enter number of pages: ";
-	cin >> newBook.pageCount;
+	string PAGECOUNT;
+	cin >> PAGECOUNT;
+	if (!hasOnlyInt(PAGECOUNT)) {
+		cout << "INVALID PAGECOUNT, PAGECOUNT cannot contain non numeric values." << endl;
+		goto ADDBOOK_LABEL_PAGECOUNT;
+	}
 
+	newBook.pageCount = std::stoi(PAGECOUNT);
 	fileHandler().appendNewBook(newBook);
 
 	cout << "Book added successfully." << endl;
@@ -593,7 +730,7 @@ account fileHandler::getAccountByName(string username) { //name pass role
 		if (Row[0] == username) {
 			account givenAcc;
 			givenAcc.exists = true;
-			givenAcc.permissionLevel = stoi(Row[2]);
+			givenAcc.permissionLevel = std::stoi(Row[2]);
 			givenAcc.username = Row[0];
 			return givenAcc;
 		}
@@ -725,7 +862,12 @@ void menu::SetDescription(string desc) {
 	PageDesc = desc;
 }
 
-void menu::AppendNav(string navText, int overwriteIndex) {
+void menu::AppendNav(string navText, int overwriteIndex, char overwriteChar) {
+	if (overwriteChar != '?') {
+		string str = "[] " + navText + "\n"; str.insert(str.begin() + 1, overwriteChar);
+		PageNav.append(str);
+		return;
+	}
 	if (overwriteIndex != -1) {
 		PageNav.append("[" + to_string(overwriteIndex) + "] " + navText + "\n");
 		return;
@@ -734,7 +876,77 @@ void menu::AppendNav(string navText, int overwriteIndex) {
 	PageNavIndex++;
 }
 
-void menu::DisplayPage() {
-	system("cls");
+void menu::DisplayPage(bool clearScreen) {
+	if (clearScreen) {
+		system("cls");
+	}
 	cout << PageTitle << endl << PageDesc << endl << PageNav << endl;
+}
+
+//----------------------------------------------------------------------------------------------------------
+
+long long int convertToComparisonINT(bookProperty BookProperty, string Str) { //only uses first letter of string ASCII code, or entire int
+	if (Str.length() == 0 || Str == "") {
+		return 0;
+	}
+	switch (BookProperty) {
+	case ISBN:
+	case PageCount:
+		return std::stoll(Str);
+
+	case Title:
+	case Genre:
+	case Author:
+	case Language:
+		return (int)(Str[0]);
+
+	default:
+		cout << "Error with bookProperty";
+		return 0;
+	}
+}
+
+string getPropertyFromBook(bookProperty BookProperty, book Book) {
+	switch (BookProperty) {
+	case ISBN:
+		return Book.ISBN;
+	case Title:
+		return Book.title;
+	case Genre:
+		return Book.genre;
+	case Author:
+		return Book.author;
+	case Language:
+		return Book.language;
+	case PageCount:
+		return to_string(Book.pageCount);
+	default:
+		cout << "Error with book property";
+		return "";
+	}
+	return "";
+}
+
+void sortBooksBy(vector<book>& books, bookProperty BookProperty) { //major optimization is to make a temp array with all the converted comparision ints so it does not need to convert each interation
+	int position = 0;
+
+LABELSTARTSORT:
+	long long int smallest = convertToComparisonINT(BookProperty, getPropertyFromBook(BookProperty, books[position]));
+	int positionSmall = position;
+	for (int i = 0 + position; i < books.size(); i++) {
+		long long int comparison = convertToComparisonINT(BookProperty, getPropertyFromBook(BookProperty, books[i]));
+		
+		if (smallest > comparison) {
+			smallest = comparison;
+			positionSmall = i;
+		}
+	}
+	book SmallestBook = books[positionSmall];
+	books.erase(books.begin() + positionSmall);
+	books.insert(books.begin() + position, SmallestBook);
+
+	position++;
+
+	if (!(position == books.size() - 1))
+		goto LABELSTARTSORT;
 }
