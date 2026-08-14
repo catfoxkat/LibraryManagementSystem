@@ -25,19 +25,19 @@ using std::setfill;
 
 
 std::map<int, int> keyToInt = {
-			{48, 0},
-			{49, 1},
-			{50, 2},
-			{51, 3},
-			{52, 4},
-			{53, 5},
-			{54, 6},
-			{55, 7},
-			{56, 8},
-			{57, 9}
+	{48, 0},
+	{49, 1},
+	{50, 2},
+	{51, 3},
+	{52, 4},
+	{53, 5},
+	{54, 6},
+	{55, 7},
+	{56, 8},
+	{57, 9}
 };
 
-enum bookProperty {
+enum bookProperty { // do not rearrange!! it will break select menus and file handling, GREATLY!
 	ISBN,
 	Title,
 	Author,
@@ -63,8 +63,7 @@ public:
 
 //----------------------------------------------------------------------------------------------------------
 
-class book {
-public:
+struct book {
 	string title;
 	string author;
 	string genre;
@@ -82,8 +81,11 @@ void searchBook();
 void sortBook();
 void bookInterface();
 void bookSearchSubInterface();
-void displayAllBooks(bool sort = false, bookProperty BookProperty = ISBN);
-void displayBookMenuInterface();
+void displayAllBooks(vector<book>& Books, bool sort = false, bookProperty BookProperty = ISBN);
+void displayBookMenuInterface(vector<book>& Books);
+void displayHeader();
+void displayBookDetails(int index, book Book);
+void searchBookProperty();
 void sortBooksBy(vector<book>& books, bookProperty BookProperty);
 bookProperty selectBookProperty();
 
@@ -99,16 +101,13 @@ public:
 
 	account getAccountByName(string username);
 
-	book getBookByISBN(string ISBN);
+	vector<book> getBooksBy(bookProperty BookProperty, string Property);
 
 	vector<book> getAllBooks();
 
 	void removeBook(string ISBN);
 
 	bool validateAccount(string username, string password);
-
-	vector<string> getBookNames();
-
 private:
 	vector<string> splitByDelimiter(string str, string delimiter);
 };
@@ -169,39 +168,39 @@ const string BookDelimiter = "|";
 int main() {
 	fileHandler().initializeFiles();
 	initMenu_Main();
-	
+
 	cin.ignore();
-	
-	
-	LABEL_START_MENU:
+
+
+LABEL_START_MENU:
 	while (true) {
 		Menu_Main.DisplayPage();
 		switch (listenForInt()) {
-			case 1:
-				cout << "entering login function";
-				accountHandler().loginFunction();
-				if (currentUser.exists) {
-					cout << "yay im in!" << endl;
-				}
-				else {
-					cout << "im not in :(" << endl;
-				}
-				cin.ignore();
-				break;
-			case 2:
-				cout << "entering register function";
-				accountHandler().registerFunction();
-				break;
-			case 3:
-				guest = true;
-				currentUser.username = "Guest";
-				currentUser.permissionLevel = -1;
-				break;
-			case 0:
-				return 0;
-			default: continue;
+		case 1:
+			cout << "entering login function";
+			accountHandler().loginFunction();
+			if (currentUser.exists) {
+				cout << "yay im in!" << endl;
+			}
+			else {
+				cout << "im not in :(" << endl;
+			}
+			cin.ignore();
+			break;
+		case 2:
+			cout << "entering register function";
+			accountHandler().registerFunction();
+			break;
+		case 3:
+			guest = true;
+			currentUser.username = "Guest";
+			currentUser.permissionLevel = -1;
+			break;
+		case 0:
+			return 0;
+		default: continue;
 		}
-		
+
 		if (currentUser.exists || guest) {
 			break;
 		}
@@ -216,33 +215,33 @@ int main() {
 		Menu_Main_Logged.DisplayPage();
 		switch (listenForInt()) {
 			cout << "waiting";
-			case 0:
-				cout << "CLEARING";
-				guest = false;
-				currentUser = account();
-				goto LABEL_START_MENU;
+		case 0:
+			cout << "CLEARING";
+			guest = false;
+			currentUser = account();
+			goto LABEL_START_MENU;
 
-			case 1:
-				cout << "BROWSE";
-				bookInterface();
-				break;
-			case 2:
-				cout << "FACILITY BOOKING";
-				break;
-			case 3:
-				cout << "FEEDBACK";
-				break;
-			case 4:
-				if (currentUser.permissionLevel != 1) { break; }
-				break;
-			case 5:
-				if (currentUser.permissionLevel != 1) { break; }
-				break;
-			case 6:
-				if (currentUser.permissionLevel != 1) { break; }
-				break;
-			
-			default: continue;
+		case 1:
+			cout << "BROWSE";
+			bookInterface();
+			break;
+		case 2:
+			cout << "FACILITY BOOKING";
+			break;
+		case 3:
+			cout << "FEEDBACK";
+			break;
+		case 4:
+			if (currentUser.permissionLevel != 1) { break; }
+			break;
+		case 5:
+			if (currentUser.permissionLevel != 1) { break; }
+			break;
+		case 6:
+			if (currentUser.permissionLevel != 1) { break; }
+			break;
+
+		default: continue;
 		}
 	}
 
@@ -306,11 +305,7 @@ void initBookSearchMenu() {
 	bookSearchMenu = menu();
 	bookSearchMenu.SetTitle("Search book");
 	bookSearchMenu.AppendNav("Display all books");
-	bookSearchMenu.AppendNav("By ISBN");
-	bookSearchMenu.AppendNav("By Title");
-	bookSearchMenu.AppendNav("By Genre");
-	bookSearchMenu.AppendNav("By Author");
-	bookSearchMenu.AppendNav("By Language");
+	bookSearchMenu.AppendNav("By Property");
 	bookSearchMenu.AppendNav("Exit", 0);
 }
 
@@ -353,7 +348,7 @@ void accountHandler::registerFunction() {
 	}
 	system("cls");
 
-	inputusr:
+inputusr:
 	cout << "Input username (Alphanumeric characters only, must be between 3 to 36 characters in length.)\n"; //probably add requirements like "Must be x chars, no symbols"
 	string username = listenForString(); //add check for username conflicts
 
@@ -365,7 +360,7 @@ void accountHandler::registerFunction() {
 		cout << "Username must be between 3 to 36 characters in length.\n\n"; goto inputusr;
 	}
 
-	inputpwd:
+inputpwd:
 	cout << "Input password (Alphanumeric characters only, must be between 6 to 36 characters in length.)\n";
 	string password = listenForString();
 	cout << "Input confirm password\n";
@@ -442,33 +437,19 @@ void bookSearchSubInterface() {
 	while (true) {
 		bookSearchMenu.DisplayPage();
 		switch (listenForInt()) {
-		case 1:
-			cout << "Diplay all";
-			displayAllBooks(false);
-			displayBookMenuInterface();
+		case 1: {
+			vector<book> Books = fileHandler().getAllBooks();
+			displayAllBooks(Books, false, ISBN);
+			displayBookMenuInterface(Books);
 			break;
+		}
 		case 2:
-			cout << "Search by ISBN";
-			break;
-		case 3:
-			cout << "Search by Title";
-			break;
-		case 4:
-			cout << "Search by Author";
-			break;
-		case 5:
-			cout << "Search by Genre";
-			break;
-		case 6:
-			cout << "Search by Language";
+			searchBookProperty();
 			break;
 		case 0:
 			return;
 		}
 	}
-
-
-
 }
 
 void displayHeader() {
@@ -485,7 +466,7 @@ void displayHeader() {
 		<< setw(10) << "LANGUAGE"
 		<< " | "
 		<< setw(4) << "PAGE"
-		<< endl;
+		<< setw(0) << endl;
 }
 
 void displayBookDetails(int index, book Book) {
@@ -502,33 +483,33 @@ void displayBookDetails(int index, book Book) {
 		<< " | "
 		<< setw(10) << Book.language.substr(0, 10)
 		<< " | "
-		<< setw(4) << to_string(Book.pageCount).substr(0, 4);
+		<< setw(4) << to_string(Book.pageCount).substr(0, 4)
+		<< setw(0) << endl;
 }
 
-void displayAllBooks(bool sort, bookProperty BookProperty) {
+void displayAllBooks(vector<book>& Books, bool sort, bookProperty BookProperty) {
 	system("CLS");
-	vector<book> Books = fileHandler().getAllBooks();
+
 	if (sort) {
 		sortBooksBy(Books, BookProperty);
 	}
 
 	displayHeader();
-
+	cout << endl;
 	for (int i = 0; i < Books.size(); i++) {
-		cout << endl;
-		displayBookDetails(i, Books[i]);
+		displayBookDetails(i + 1, Books[i]);
 	}
-	cout << setw(0);
 }
 
-void displayBookMenuInterface() {
+void displayBookMenuInterface(vector<book>& Books) { //ADD PER VECTOR SUPPORT (FOR SEARCHED BOOKS)
 	displayBookMenu.DisplayPage(false);
 	while (true) {
 		switch (listenForChar()) {
 		case 's':
 			cout << "Sort";
-			displayAllBooks(true, selectBookProperty());
+			displayAllBooks(Books, true, selectBookProperty());
 			displayBookMenu.DisplayPage(false);
+			cout << "Displaying sorted";
 			break;
 		case 'x':
 			cout << "Select";
@@ -546,20 +527,45 @@ void displayBookMenuInterface() {
 
 bookProperty selectBookProperty() {
 	cout << endl
-		<< "Select a property to sort by." << endl
+		<< "Select a property." << endl
 		<< "[1] ISBN" << endl
 		<< "[2] Title" << endl
-		<< "[3] Genre" << endl
-		<< "[4] Author" << endl
+		<< "[3] Author" << endl
+		<< "[4] Genre" << endl
 		<< "[5] Language" << endl
 		<< "[6] Page Count" << endl;
-	SELECTBOOKPROPERTY_LABEL:
+SELECTBOOKPROPERTY_LABEL:
 	int num = listenForInt();
 	if (num > 6) {
 		goto SELECTBOOKPROPERTY_LABEL;
 	}
 	return bookProperty(num - 1);
 }
+
+void searchBookProperty() {
+	system("CLS");
+	bookProperty BookProperty = selectBookProperty();
+	cout << "Search by : ";
+	vector<book> Books = fileHandler().getBooksBy(BookProperty, listenForString());
+	system("CLS");
+	if (Books.size() == 0) {
+		cout << "No entries found." << endl << "Press enter to exit.";
+		cin.ignore();
+		return;
+	}
+	else {
+		cout << Books.size() << " entries found." << endl;
+		displayHeader();
+		cout << endl;
+		for (int i = 0; i < Books.size(); i++) {
+			displayBookDetails(i + 1, Books[i]);
+		}
+	}
+	displayBookMenuInterface(Books);
+	return;
+}
+
+//----------------------------------------------------------------------------------------------------------
 
 bool hasOnlyInt(string str) {
 	for (int i = 0; i < str.length(); i++) {
@@ -582,7 +588,7 @@ bool containsDelimiter(string str) {
 void addBook() {
 	book newBook;
 
-	ADDBOOK_LABEL_ISBN:
+ADDBOOK_LABEL_ISBN:
 	cout << "Enter book ISBN: ";
 	string ISBN = listenForString();
 	if (!(ISBN.length() == 10 || ISBN.length() == 13)) {
@@ -594,8 +600,8 @@ void addBook() {
 		goto ADDBOOK_LABEL_ISBN;
 	}
 	newBook.ISBN = ISBN;
-	
-	ADDBOOK_LABEL_TITLE:
+
+ADDBOOK_LABEL_TITLE:
 	cout << "Enter book title: ";
 	string TITLE = listenForString();
 	if (containsDelimiter(TITLE)) {
@@ -605,7 +611,7 @@ void addBook() {
 	newBook.title = TITLE;
 
 
-	ADDBOOK_LABEL_GENRE:
+ADDBOOK_LABEL_GENRE:
 	cout << "Enter book genre: ";
 	string GENRE = listenForString();
 	if (containsDelimiter(GENRE)) {
@@ -614,7 +620,7 @@ void addBook() {
 	}
 	newBook.genre = GENRE;
 
-	ADDBOOK_LABEL_AUTHOR:
+ADDBOOK_LABEL_AUTHOR:
 	cout << "Enter book author: ";
 	string AUTHOR = listenForString();
 	if (containsDelimiter(AUTHOR)) {
@@ -623,7 +629,7 @@ void addBook() {
 	}
 	newBook.author = AUTHOR;
 
-	ADDBOOK_LABEL_LANGUAGE:
+ADDBOOK_LABEL_LANGUAGE:
 	cout << "Enter book language: ";
 	string LANGUAGE = listenForString();
 	if (containsDelimiter(LANGUAGE)) {
@@ -632,7 +638,7 @@ void addBook() {
 	}
 	newBook.language = LANGUAGE;
 
-	ADDBOOK_LABEL_PAGECOUNT:
+ADDBOOK_LABEL_PAGECOUNT:
 	cout << "Enter number of pages: ";
 	string PAGECOUNT;
 	cin >> PAGECOUNT;
@@ -695,8 +701,8 @@ void fileHandler::appendNewBook(book newBook)
 	booksFile
 		<< newBook.ISBN << BookDelimiter
 		<< newBook.title << BookDelimiter
-		<< newBook.genre << BookDelimiter
 		<< newBook.author << BookDelimiter
+		<< newBook.genre << BookDelimiter
 		<< newBook.language << BookDelimiter
 		<< newBook.pageCount
 		<< endl;
@@ -738,23 +744,25 @@ account fileHandler::getAccountByName(string username) { //name pass role
 	return account(); //return default exists? false
 }
 
-book fileHandler::getBookByISBN(string ISBN) {
+vector<book> fileHandler::getBooksBy(bookProperty BookProperty, string Property) {
 	ifstream books(BOOKS_PATH, std::ios::in);
 	string line;
-	book Book;
+	vector<book> bookArray;
 	while (getline(books, line)) {
 		vector<string> Row = splitByDelimiter(line, BookDelimiter);
-		if (Row[0] != ISBN) {
-			Book.ISBN = ISBN;
+		if (Row[(int)BookProperty] == Property) {
+			book Book;
+			Book.ISBN = Row[0];
 			Book.title = Row[1];
 			Book.genre = Row[2];
 			Book.author = Row[3];
 			Book.language = Row[4];
 			Book.pageCount = std::stoi(Row[5]);
+			bookArray.push_back(Book);
 		}
 	}
 	books.close();
-	return book();
+	return bookArray;
 }
 
 vector<book> fileHandler::getAllBooks() {
@@ -766,8 +774,8 @@ vector<book> fileHandler::getAllBooks() {
 		book Book;
 		Book.ISBN = Row[0];
 		Book.title = Row[1];
-		Book.genre = Row[2];
-		Book.author = Row[3];
+		Book.author = Row[2];
+		Book.genre = Row[3];
 		Book.language = Row[4];
 		Book.pageCount = std::stoi(Row[5]);
 		array.push_back(Book);
@@ -943,13 +951,13 @@ LABELSTARTSORT:
 			positionSmall = i;
 		}
 	}
-	
+
 	books.insert(books.begin() + position, books[positionSmall + position]);
 	books.erase(books.begin() + positionSmall + position + 1);
-	
+
 	comparisonArray.erase(comparisonArray.begin() + positionSmall);
 	position++;
-	
+
 	if (!(comparisonArray.size() == 1))
 		goto LABELSTARTSORT;
 }
