@@ -416,7 +416,6 @@ LABEL_START_LOGIN_FUNCTION:
 //----------------------------------------------------------------------------------------------------------
 
 void bookInterface() {
-	//LABEL_BOOK_MENU:
 	while (true) {
 		bookMenu.DisplayPage();
 		switch (listenForInt()) {
@@ -455,10 +454,10 @@ void bookSearchSubInterface() {
 			cout << "Search by Title";
 			break;
 		case 4:
-			cout << "Search by Genre";
+			cout << "Search by Author";
 			break;
 		case 5:
-			cout << "Search by Author";
+			cout << "Search by Genre";
 			break;
 		case 6:
 			cout << "Search by Language";
@@ -472,51 +471,56 @@ void bookSearchSubInterface() {
 
 }
 
+void displayHeader() {
+	cout << left
+		<< "      "
+		<< setw(13) << "ISBN"
+		<< " | "
+		<< setw(64) << "TITLE"
+		<< " | "
+		<< setw(24) << "AUTHOR"
+		<< " | "
+		<< setw(16) << "GENRE"
+		<< " | "
+		<< setw(10) << "LANGUAGE"
+		<< " | "
+		<< setw(4) << "PAGE"
+		<< endl;
+}
+
+void displayBookDetails(int index, book Book) {
+	cout << right
+		<< "[" << setw(3) << index << "] "
+		<< left
+		<< setw(13) << Book.ISBN.substr(0, 13)
+		<< " | "
+		<< setw(64) << Book.title.substr(0, 64)
+		<< " | "
+		<< setw(24) << Book.author.substr(0, 24)
+		<< " | "
+		<< setw(16) << Book.genre.substr(0, 16)
+		<< " | "
+		<< setw(10) << Book.language.substr(0, 10)
+		<< " | "
+		<< setw(4) << to_string(Book.pageCount).substr(0, 4);
+}
+
 void displayAllBooks(bool sort, bookProperty BookProperty) {
 	system("CLS");
 	vector<book> Books = fileHandler().getAllBooks();
 	if (sort) {
 		sortBooksBy(Books, BookProperty);
 	}
-	cout << left 
-		<< "      "
-		<< setw(13) << "ISBN"
-		<< " | "
-		<< setw(64) << "TITLE"
-		<< " | "
-		<< setw(16) << "GENRE"
-		<< " | "
-		<< setw(24) << "AUTHOR"
-		<< " | "
-		<< setw(10) << "LANGUAGE"
-		<< " | "
-		<< setw(4) << "PAGE"
-		<< endl;
 
+	displayHeader();
 
 	for (int i = 0; i < Books.size(); i++) {
 		cout << endl;
-		cout << right
-			<< "[" << setw(3) << i << "] "
-			<< left
-			<< setw(13) << Books[i].ISBN.substr(0,13)
-			<< " | "
-			<< setw(64) << Books[i].title.substr(0, 64)
-			<< " | "
-			<< setw(16) << Books[i].genre.substr(0, 16)
-			<< " | "
-			<< setw(24) << Books[i].author.substr(0, 24)
-			<< " | "
-			<< setw(10) << Books[i].language.substr(0, 10)
-			<< " | "
-			<< setw(4) << to_string(Books[i].pageCount).substr(0, 4);
+		displayBookDetails(i, Books[i]);
 	}
 	cout << setw(0);
 }
-//displayBookMenu.AppendNav("Sort", -1, 's');
-//displayBookMenu.AppendNav("Select", -1, 'x');
-//displayBookMenu.AppendNav("View selected", -1, 'v');
-//displayBookMenu.AppendNav("Quit", 0);
+
 void displayBookMenuInterface() {
 	displayBookMenu.DisplayPage(false);
 	while (true) {
@@ -539,19 +543,14 @@ void displayBookMenuInterface() {
 		}
 	}
 }
-//ISBN,
-//Title,
-//Author,
-//Genre,
-//Language,
-//PageCount
+
 bookProperty selectBookProperty() {
 	cout << endl
 		<< "Select a property to sort by." << endl
 		<< "[1] ISBN" << endl
 		<< "[2] Title" << endl
-		<< "[3] Author" << endl
-		<< "[4] Genre" << endl
+		<< "[3] Genre" << endl
+		<< "[4] Author" << endl
 		<< "[5] Language" << endl
 		<< "[6] Page Count" << endl;
 	SELECTBOOKPROPERTY_LABEL:
@@ -927,26 +926,30 @@ string getPropertyFromBook(bookProperty BookProperty, book Book) {
 	return "";
 }
 
-void sortBooksBy(vector<book>& books, bookProperty BookProperty) { //major optimization is to make a temp array with all the converted comparision ints so it does not need to convert each interation
+void sortBooksBy(vector<book>& books, bookProperty BookProperty) {
 	int position = 0;
-
+	vector<long long int> comparisonArray;
+	comparisonArray.reserve(books.size());
+	for (int i = 0; i < books.size(); i++) {
+		comparisonArray.push_back(convertToComparisonINT(BookProperty, getPropertyFromBook(BookProperty, books[i])));
+	}
 LABELSTARTSORT:
-	long long int smallest = convertToComparisonINT(BookProperty, getPropertyFromBook(BookProperty, books[position]));
-	int positionSmall = position;
-	for (int i = 0 + position; i < books.size(); i++) {
-		long long int comparison = convertToComparisonINT(BookProperty, getPropertyFromBook(BookProperty, books[i]));
-		
-		if (smallest > comparison) {
-			smallest = comparison;
+	long long int smallest = comparisonArray[0];
+	int positionSmall = 0;
+
+	for (int i = 1; i < comparisonArray.size(); i++) {
+		if (smallest > comparisonArray[i]) {
+			smallest = comparisonArray[i];
 			positionSmall = i;
 		}
 	}
-	book SmallestBook = books[positionSmall];
-	books.erase(books.begin() + positionSmall);
-	books.insert(books.begin() + position, SmallestBook);
-
+	
+	books.insert(books.begin() + position, books[positionSmall + position]);
+	books.erase(books.begin() + positionSmall + position + 1);
+	
+	comparisonArray.erase(comparisonArray.begin() + positionSmall);
 	position++;
-
-	if (!(position == books.size() - 1))
+	
+	if (!(comparisonArray.size() == 1))
 		goto LABELSTARTSORT;
 }
