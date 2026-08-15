@@ -4,38 +4,10 @@
 #include<filesystem>
 #include<fstream>
 #include<conio.h> //for inputListener getch
-#include<map>
-#include<vector>
 
 namespace fs = std::filesystem;
 
-using std::cout;
-using std::cin;
-using std::string;
-using std::ifstream;
-using std::ofstream;
-using std::vector;
-using std::endl;
-using std::to_string;
-using std::getline;
-using std::left;
-using std::right;
-using std::setw;
-using std::setfill;
-
-
-std::map<int, int> keyToInt = {
-	{48, 0},
-	{49, 1},
-	{50, 2},
-	{51, 3},
-	{52, 4},
-	{53, 5},
-	{54, 6},
-	{55, 7},
-	{56, 8},
-	{57, 9}
-};
+using namespace std;
 
 enum bookProperty { // do not rearrange!! it will break select menus and file handling, GREATLY!
 	ISBN,
@@ -48,32 +20,34 @@ enum bookProperty { // do not rearrange!! it will break select menus and file ha
 
 //----------------------------------------------------------------------------------------------------------
 
+void LoggedIn();
+
+//----------------------------------------------------------------------------------------------------------
+
 struct account {
 	string username;
 	int permissionLevel = 0; //-1 guest, 0 user, 1 staff
 	bool exists = false;
 };
 
-class accountHandler {
-public:
-	void registerFunction();
+void registerFunction();
 
-	void loginFunction();
-};
+void loginFunction();
 
 //----------------------------------------------------------------------------------------------------------
 
 struct book {
+	string ISBN;
 	string title;
 	string author;
 	string genre;
 	string language;
-	string ISBN;
 
 	int pageCount = 0;
 	int available = 0; //how many available to borrow
 	int borrowed = 0; //how many currently borrowed
 };
+
 void addBook();
 void removeBook();
 void editBook();
@@ -81,36 +55,33 @@ void searchBook();
 void sortBook();
 void bookInterface();
 void bookSearchSubInterface();
-void displayAllBooks(vector<book>& Books, bool sort = false, bookProperty BookProperty = ISBN);
-void displayBookMenuInterface(vector<book>& Books);
+void displayAllBooks(bool sort = false, bookProperty BookProperty = ISBN);
+void displayBookMenuInterface();
 void displayHeader();
 void displayBookDetails(int index, book Book);
 void searchBookProperty();
-void sortBooksBy(vector<book>& books, bookProperty BookProperty);
+void sortBooksBy(bookProperty BookProperty);
 bookProperty selectBookProperty();
 
 //----------------------------------------------------------------------------------------------------------
 
-class fileHandler {
-public:
-	void initializeFiles();
+void initializeFiles();
 
-	void appendNewAccount(string username, string password);
+void appendNewAccount(string username, string password);
 
-	void appendNewBook(book newBook);
+void appendNewBook(book newBook);
 
-	account getAccountByName(string username);
+account getAccountByName(string username);
 
-	vector<book> getBooksBy(bookProperty BookProperty, string Property);
+void getBooksBy(bookProperty BookProperty, string Property);
 
-	vector<book> getAllBooks();
+void getAllBooks();
 
-	void removeBook(string ISBN);
+void removeBook(string ISBN);
 
-	bool validateAccount(string username, string password);
-private:
-	vector<string> splitByDelimiter(string str, string delimiter);
-};
+bool validateAccount(string username, string password);
+
+int splitByDelimiter(string str, string delimiter);
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -124,8 +95,7 @@ bool promptYesNo(string message);
 
 //----------------------------------------------------------------------------------------------------------
 
-class menu {
-public:
+struct menu {
 	void SetTitle(string title);
 
 	void SetDescription(string title);
@@ -133,7 +103,7 @@ public:
 	void AppendNav(string navText, int overwriteIndex = -1, char overwriteChar = '?');
 
 	void DisplayPage(bool clearScreen = true);
-private:
+
 	string PageTitle;
 	string PageDesc;
 	string PageNav = "";
@@ -158,6 +128,8 @@ menu displayBookMenu;
 account currentUser;
 bool guest;
 
+const int MAX_BOOKS = 512;
+
 const fs::path CURRENT_DIRECTORY = fs::current_path();
 const fs::path ACCOUNTS_PATH = CURRENT_DIRECTORY / "accounts.txt";
 const fs::path BOOKS_PATH = CURRENT_DIRECTORY / "books.txt";
@@ -165,20 +137,23 @@ const fs::path BOOKS_PATH = CURRENT_DIRECTORY / "books.txt";
 const string Delimiter = ", ";
 const string BookDelimiter = "|";
 
+book BookArray[MAX_BOOKS];
+int BooksIndexed = 0;
+
+string SplitString[16];
+
 int main() {
-	fileHandler().initializeFiles();
+	initializeFiles();
 	initMenu_Main();
 
 	cin.ignore();
 
-
-LABEL_START_MENU:
 	while (true) {
 		Menu_Main.DisplayPage();
 		switch (listenForInt()) {
 		case 1:
 			cout << "entering login function";
-			accountHandler().loginFunction();
+			loginFunction();
 			if (currentUser.exists) {
 				cout << "yay im in!" << endl;
 			}
@@ -189,7 +164,7 @@ LABEL_START_MENU:
 			break;
 		case 2:
 			cout << "entering register function";
-			accountHandler().registerFunction();
+			registerFunction();
 			break;
 		case 3:
 			guest = true;
@@ -202,10 +177,13 @@ LABEL_START_MENU:
 		}
 
 		if (currentUser.exists || guest) {
-			break;
+			LoggedIn();
 		}
 	}
-	// LOGGED IN
+	return 0;
+}
+
+void LoggedIn() {
 	initMenu_Main_Logged();
 	initBookSearchMenu();
 	initBookMenu();
@@ -219,7 +197,7 @@ LABEL_START_MENU:
 			cout << "CLEARING";
 			guest = false;
 			currentUser = account();
-			goto LABEL_START_MENU;
+			return;
 
 		case 1:
 			cout << "BROWSE";
@@ -244,8 +222,6 @@ LABEL_START_MENU:
 		default: continue;
 		}
 	}
-
-	return 0;
 }
 
 void initMenu_Main() {
@@ -320,7 +296,7 @@ void initDisplayBookMenu() {
 //----------------------------------------------------------------------------------------------------------
 
 bool validateAccountLogin(string username, string password) {
-	return fileHandler().validateAccount(username, password);
+	return validateAccount(username, password);
 }
 
 bool valueInRange(int value, int minRange, int maxRange) {
@@ -342,69 +318,83 @@ bool validString(string str) { //checks if string has invalid chars (restricted 
 	return true;
 }
 
-void accountHandler::registerFunction() {
+void registerFunction() {
 	if (!promptYesNo("Continue to registration? [y/n]\n")) {
 		return;
 	}
 	system("cls");
 
-inputusr:
-	cout << "Input username (Alphanumeric characters only, must be between 3 to 36 characters in length.)\n"; //probably add requirements like "Must be x chars, no symbols"
-	string username = listenForString(); //add check for username conflicts
+	string username, password;
 
-	if (!validString(username)) {
-		cout << "Invalid characters.\n\n";
-		goto inputusr;
-	}
-	if (!valueInRange(static_cast<int>(username.length()), 3, 36)) {
-		cout << "Username must be between 3 to 36 characters in length.\n\n"; goto inputusr;
+	while (true) {
+		cout << "Input username (Alphanumeric characters only, must be between 3 to 36 characters in length.)\n"; //probably add requirements like "Must be x chars, no symbols"
+		username = listenForString(); //add check for username conflicts
+
+		if (!validString(username)) {
+			cout << "Invalid characters.\n\n";
+			continue;
+		}
+		if (!valueInRange(static_cast<int>(username.length()), 3, 36)) {
+			cout << "Username must be between 3 to 36 characters in length.\n\n";
+			continue;
+		}
+		else {
+			break;
+		}
 	}
 
-inputpwd:
-	cout << "Input password (Alphanumeric characters only, must be between 6 to 36 characters in length.)\n";
-	string password = listenForString();
-	cout << "Input confirm password\n";
-	string confirmPassword = listenForString();
+	while (true) {
+		cout << "Input password (Alphanumeric characters only, must be between 6 to 36 characters in length.)\n";
+		password = listenForString();
+		cout << "Input confirm password\n";
+		string confirmPassword = listenForString();
 
-	if (!(password == confirmPassword)) {
-		cout << "Passwords do not match!\n\n"; goto inputpwd;
-	}
-	if (!validString(password)) {
-		cout << "Invalid characters.\n\n";
-		goto inputpwd;
-	}
-	if (!valueInRange(static_cast<int>(password.length()), 6, 36)) {
-		cout << "Password must be between 6 to 36 characters in length.\n\n"; goto inputpwd;
+		if (!(password == confirmPassword)) {
+			cout << "Passwords do not match!\n\n"; continue;
+		}
+		if (!validString(password)) {
+			cout << "Invalid characters.\n\n";
+			continue;
+		}
+		if (!valueInRange(static_cast<int>(password.length()), 6, 36)) {
+			cout << "Password must be between 6 to 36 characters in length.\n\n";
+			continue;
+		}
+		else {
+			break;
+		}
+
 	}
 
 	cout << "REGISTER ACCOUNT WITH USERNAME OF " << username << " AND PASSWORD OF " << password << endl;
-	fileHandler().appendNewAccount(username, password);
+	appendNewAccount(username, password);
 }
 
-void accountHandler::loginFunction() {
-LABEL_START_LOGIN_FUNCTION:
-	if (!promptYesNo("Continue to login? [y/n]\n")) {
-		currentUser = account();
-		return;
-	}
+void loginFunction() {
+	while (true) {
+		if (!promptYesNo("Continue to login? [y/n]\n")) {
+			currentUser = account();
+			return;
+		}
 
-	system("cls");
+		system("cls");
 
-	cout << "Input username\n";
-	string username = listenForString();
+		cout << "Input username\n";
+		string username = listenForString();
 
-	cout << "Input password\n";
-	string password = listenForString();
+		cout << "Input password\n";
+		string password = listenForString();
 
-	cout << "LOGIN WITH USERNAME OF " << username << " AND PASSWORD OF " << password << endl;
-	if (validateAccountLogin(username, password)) {
-		cout << "LOGIN SUCCESS." << endl;
-		currentUser = fileHandler().getAccountByName(username);
-		return;
-	}
-	else {
-		cout << "INVALID USERNAME OR PASSWORD" << endl;
-		goto LABEL_START_LOGIN_FUNCTION;
+		cout << "LOGIN WITH USERNAME OF " << username << " AND PASSWORD OF " << password << endl;
+		if (validateAccountLogin(username, password)) {
+			cout << "LOGIN SUCCESS." << endl;
+			currentUser = getAccountByName(username);
+			return;
+		}
+		else {
+			cout << "INVALID USERNAME OR PASSWORD" << endl;
+			continue;
+		}
 	}
 }
 
@@ -438,9 +428,9 @@ void bookSearchSubInterface() {
 		bookSearchMenu.DisplayPage();
 		switch (listenForInt()) {
 		case 1: {
-			vector<book> Books = fileHandler().getAllBooks();
-			displayAllBooks(Books, false, ISBN);
-			displayBookMenuInterface(Books);
+			getAllBooks();
+			displayAllBooks(false, ISBN);
+			displayBookMenuInterface();
 			break;
 		}
 		case 2:
@@ -487,27 +477,27 @@ void displayBookDetails(int index, book Book) {
 		<< setw(0) << endl;
 }
 
-void displayAllBooks(vector<book>& Books, bool sort, bookProperty BookProperty) {
+void displayAllBooks(bool sort, bookProperty BookProperty) {
 	system("CLS");
 
 	if (sort) {
-		sortBooksBy(Books, BookProperty);
+		sortBooksBy(BookProperty);
 	}
 
 	displayHeader();
 	cout << endl;
-	for (int i = 0; i < Books.size(); i++) {
-		displayBookDetails(i + 1, Books[i]);
+	for (int i = 0; i < BooksIndexed; i++) {
+		displayBookDetails(i + 1, BookArray[i]);
 	}
 }
 
-void displayBookMenuInterface(vector<book>& Books) { //ADD PER VECTOR SUPPORT (FOR SEARCHED BOOKS)
+void displayBookMenuInterface() {
 	displayBookMenu.DisplayPage(false);
 	while (true) {
 		switch (listenForChar()) {
 		case 's':
 			cout << "Sort";
-			displayAllBooks(Books, true, selectBookProperty());
+			displayAllBooks(true, selectBookProperty());
 			displayBookMenu.DisplayPage(false);
 			cout << "Displaying sorted";
 			break;
@@ -534,11 +524,15 @@ bookProperty selectBookProperty() {
 		<< "[4] Genre" << endl
 		<< "[5] Language" << endl
 		<< "[6] Page Count" << endl;
-SELECTBOOKPROPERTY_LABEL:
-	int num = listenForInt();
-	if (num > 6) {
-		goto SELECTBOOKPROPERTY_LABEL;
+	int num;
+	while (true) {
+		num = listenForInt();
+		if (num > 6) {
+			continue;
+		}
+		break;
 	}
+	
 	return bookProperty(num - 1);
 }
 
@@ -546,22 +540,22 @@ void searchBookProperty() {
 	system("CLS");
 	bookProperty BookProperty = selectBookProperty();
 	cout << "Search by : ";
-	vector<book> Books = fileHandler().getBooksBy(BookProperty, listenForString());
+	getBooksBy(BookProperty, listenForString());
 	system("CLS");
-	if (Books.size() == 0) {
+	if (BooksIndexed == 0) {
 		cout << "No entries found." << endl << "Press enter to exit.";
 		cin.ignore();
 		return;
 	}
 	else {
-		cout << Books.size() << " entries found." << endl;
+		cout << BooksIndexed << " entries found." << endl;
 		displayHeader();
 		cout << endl;
-		for (int i = 0; i < Books.size(); i++) {
-			displayBookDetails(i + 1, Books[i]);
+		for (int i = 0; i < BooksIndexed; i++) {
+			displayBookDetails(i + 1, BookArray[i]);
 		}
 	}
-	displayBookMenuInterface(Books);
+	displayBookMenuInterface();
 	return;
 }
 
@@ -588,67 +582,73 @@ bool containsDelimiter(string str) {
 void addBook() {
 	book newBook;
 
-ADDBOOK_LABEL_ISBN:
-	cout << "Enter book ISBN: ";
-	string ISBN = listenForString();
-	if (!(ISBN.length() == 10 || ISBN.length() == 13)) {
-		cout << "INVALID ISBN, ISBN must be 10 (ISBN10) or 13 (ISBN13) numbers long." << endl;
-		goto ADDBOOK_LABEL_ISBN;
-	}
-	if (!hasOnlyInt(ISBN)) {
-		cout << "INVALID ISBN, ISBN cannot contain non numeric values." << endl;
-		goto ADDBOOK_LABEL_ISBN;
-	}
-	newBook.ISBN = ISBN;
+	do {
+		cout << "Enter book ISBN: ";
+		string ISBN = listenForString();
+		if (!(ISBN.length() == 10 || ISBN.length() == 13)) {
+			cout << "INVALID ISBN, ISBN must be 10 (ISBN10) or 13 (ISBN13) numbers long." << endl;
+			continue;
+		}
+		if (!hasOnlyInt(ISBN)) {
+			cout << "INVALID ISBN, ISBN cannot contain non numeric values." << endl;
+			continue;
+		}
+		newBook.ISBN = ISBN;
+	} while (newBook.ISBN == "");
+	
+	do {
+		cout << "Enter book title: ";
+		string TITLE = listenForString();
+		if (containsDelimiter(TITLE)) {
+			cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
+			continue;
+		}
+		newBook.title = TITLE;
+	} while (newBook.title == "");
 
-ADDBOOK_LABEL_TITLE:
-	cout << "Enter book title: ";
-	string TITLE = listenForString();
-	if (containsDelimiter(TITLE)) {
-		cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
-		goto ADDBOOK_LABEL_TITLE;
-	}
-	newBook.title = TITLE;
+	
+	do {
+		cout << "Enter book genre: ";
+		string GENRE = listenForString();
+		if (containsDelimiter(GENRE)) {
+			cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
+			continue;
+		}
+		newBook.genre = GENRE;
+	} while (newBook.genre == "");
 
+	do {
+		cout << "Enter book author: ";
+		string AUTHOR = listenForString();
+		if (containsDelimiter(AUTHOR)) {
+			cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
+			continue;
+		}
+		newBook.author = AUTHOR;
+	} while (newBook.author == "");
 
-ADDBOOK_LABEL_GENRE:
-	cout << "Enter book genre: ";
-	string GENRE = listenForString();
-	if (containsDelimiter(GENRE)) {
-		cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
-		goto ADDBOOK_LABEL_GENRE;
-	}
-	newBook.genre = GENRE;
+	do {
+		cout << "Enter book language: ";
+		string LANGUAGE = listenForString();
+		if (containsDelimiter(LANGUAGE)) {
+			cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
+			continue;
+		}
+		newBook.language = LANGUAGE;
+	} while (newBook.language == "");
 
-ADDBOOK_LABEL_AUTHOR:
-	cout << "Enter book author: ";
-	string AUTHOR = listenForString();
-	if (containsDelimiter(AUTHOR)) {
-		cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
-		goto ADDBOOK_LABEL_AUTHOR;
-	}
-	newBook.author = AUTHOR;
-
-ADDBOOK_LABEL_LANGUAGE:
-	cout << "Enter book language: ";
-	string LANGUAGE = listenForString();
-	if (containsDelimiter(LANGUAGE)) {
-		cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
-		goto ADDBOOK_LABEL_LANGUAGE;
-	}
-	newBook.language = LANGUAGE;
-
-ADDBOOK_LABEL_PAGECOUNT:
-	cout << "Enter number of pages: ";
-	string PAGECOUNT;
-	cin >> PAGECOUNT;
-	if (!hasOnlyInt(PAGECOUNT)) {
-		cout << "INVALID PAGECOUNT, PAGECOUNT cannot contain non numeric values." << endl;
-		goto ADDBOOK_LABEL_PAGECOUNT;
-	}
-
-	newBook.pageCount = std::stoi(PAGECOUNT);
-	fileHandler().appendNewBook(newBook);
+	do {
+		cout << "Enter number of pages: ";
+		string PAGECOUNT;
+		cin >> PAGECOUNT;
+		if (!hasOnlyInt(PAGECOUNT)) {
+			cout << "INVALID PAGECOUNT, PAGECOUNT cannot contain, negative, decimal or non numeric values." << endl;
+			continue;
+		}
+		newBook.pageCount = std::stoi(PAGECOUNT);
+		appendNewBook(newBook);
+	} while (newBook.pageCount == 0);
+	
 
 	cout << "Book added successfully." << endl;
 	cin.ignore();
@@ -656,11 +656,11 @@ ADDBOOK_LABEL_PAGECOUNT:
 
 void removeBook() {
 	cout << "Enter ISBN of book to remove: ";
-	fileHandler().removeBook(listenForString());
+	removeBook(listenForString());
 }
 
 //----------------------------------------------------------------------------------------------------------
-void fileHandler::initializeFiles() {
+void initializeFiles() {
 	cout << "FILEHANDLER" << endl;
 	cout << "CURRENT DIRECTORY: \t" << CURRENT_DIRECTORY << endl;
 	cout << "ACCOUNTS FILEPATH: \t" << ACCOUNTS_PATH << endl;
@@ -686,13 +686,13 @@ void fileHandler::initializeFiles() {
 	}
 }
 
-void fileHandler::appendNewAccount(string username, string password) {
+void appendNewAccount(string username, string password) {
 	ofstream accounts; accounts.open(ACCOUNTS_PATH, std::ios_base::app);
 	accounts << username << Delimiter << password << ", 0" << endl;  //unsure if ", " should be used as a seperator. structure exp?: "[USR], [PWD], [PERMISSIONLVL]\n" 
 	accounts.close();
 }
 
-void fileHandler::appendNewBook(book newBook)
+void appendNewBook(book newBook)
 {
 	ofstream booksFile;
 
@@ -710,33 +710,34 @@ void fileHandler::appendNewBook(book newBook)
 	booksFile.close();
 }
 
-vector<string> fileHandler::splitByDelimiter(string str, string delimiter) {
-	vector<string> splitString;
+int splitByDelimiter(string str, string delimiter) {
 	size_t pos = 0;
 	string token;
+	int i = 0;
 	while ((pos = str.find(delimiter)) != string::npos) {
 		token = str.substr(0, pos);
-		splitString.push_back(token);
+		SplitString[i] = token;
 		str.erase(0, pos + delimiter.length());
+		i++;
 	}
-	splitString.push_back(str);
-	return splitString;
+	SplitString[i] = str;
+	return i + 1;
 }
 
-account fileHandler::getAccountByName(string username) { //name pass role
+account getAccountByName(string username) { //name pass role
 	ifstream accounts(ACCOUNTS_PATH, std::ios::in);
 	string line;
 	while (getline(accounts, line)) {
-		vector<string> Row = splitByDelimiter(line, Delimiter);
-		if (Row.size() < 3) {
+		int splits = splitByDelimiter(line, Delimiter);
+		if (splits < 3) {
 			cout << "Invalid account format, skipping..." << endl << endl;
 			continue;
 		}
-		if (Row[0] == username) {
+		if (SplitString[0] == username) {
 			account givenAcc;
 			givenAcc.exists = true;
-			givenAcc.permissionLevel = std::stoi(Row[2]);
-			givenAcc.username = Row[0];
+			givenAcc.permissionLevel = std::stoi(SplitString[2]);
+			givenAcc.username = SplitString[0];
 			return givenAcc;
 		}
 	}
@@ -744,54 +745,60 @@ account fileHandler::getAccountByName(string username) { //name pass role
 	return account(); //return default exists? false
 }
 
-vector<book> fileHandler::getBooksBy(bookProperty BookProperty, string Property) {
+void getBooksBy(bookProperty BookProperty, string Property) {
 	ifstream books(BOOKS_PATH, std::ios::in);
 	string line;
-	vector<book> bookArray;
+	int i = 0;
 	while (getline(books, line)) {
-		vector<string> Row = splitByDelimiter(line, BookDelimiter);
-		if (Row[(int)BookProperty] == Property) {
+		int splits = splitByDelimiter(line, BookDelimiter);
+		
+		if (SplitString[(int)BookProperty] == Property) {
 			book Book;
-			Book.ISBN = Row[0];
-			Book.title = Row[1];
-			Book.genre = Row[2];
-			Book.author = Row[3];
-			Book.language = Row[4];
-			Book.pageCount = std::stoi(Row[5]);
-			bookArray.push_back(Book);
+			Book.ISBN = SplitString[0];
+			Book.title = SplitString[1];
+			Book.author = SplitString[2];
+			Book.genre = SplitString[3];
+			Book.language = SplitString[4];
+			Book.pageCount = std::stoi(SplitString[5]);
+			BookArray[i] = Book;
+			i++;
 		}
 	}
+	BooksIndexed = i;
 	books.close();
-	return bookArray;
+	return;
+	
 }
 
-vector<book> fileHandler::getAllBooks() {
+void getAllBooks() {
 	ifstream books(BOOKS_PATH, std::ios::in);
 	string line;
-	vector<book> array;
+	int i = 0;
 	while (getline(books, line)) {
-		vector<string> Row = splitByDelimiter(line, BookDelimiter);
+		splitByDelimiter(line, BookDelimiter);
 		book Book;
-		Book.ISBN = Row[0];
-		Book.title = Row[1];
-		Book.author = Row[2];
-		Book.genre = Row[3];
-		Book.language = Row[4];
-		Book.pageCount = std::stoi(Row[5]);
-		array.push_back(Book);
+		Book.ISBN = SplitString[0];
+		Book.title = SplitString[1];
+		Book.author = SplitString[2];
+		Book.genre = SplitString[3];
+		Book.language = SplitString[4];
+		Book.pageCount = std::stoi(SplitString[5]);
+		BookArray[i] = Book;
+		i++;
 	}
+	BooksIndexed = i;
 	books.close();
-	return array;
+	return;
 }
 
-void fileHandler::removeBook(string ISBN) { //remove line with the matched ISBN
+void removeBook(string ISBN) { //remove line with the matched ISBN
 	ifstream books(BOOKS_PATH, std::ios::in);
 	ofstream newBooks;
 	newBooks.open("temp.txt");
 	string line;
 	while (std::getline(books, line)) {
-		vector<string> Row = splitByDelimiter(line, BookDelimiter);
-		if (Row[0] != ISBN) {
+		splitByDelimiter(line, BookDelimiter);
+		if (SplitString[0] != ISBN) {
 			newBooks << line << endl;
 		}
 	}
@@ -803,16 +810,16 @@ void fileHandler::removeBook(string ISBN) { //remove line with the matched ISBN
 	rename("temp.txt", fs::current_path() / "books.txt");
 }
 
-bool fileHandler::validateAccount(string username, string password) {
+bool validateAccount(string username, string password) {
 	ifstream accounts(ACCOUNTS_PATH, std::ios::in);
 	string line;
 	while (getline(accounts, line)) {
-		vector<string> Row = splitByDelimiter(line, Delimiter);
-		if (Row.size() < 3) {
+		int splits = splitByDelimiter(line, Delimiter);
+		if (splits < 3) {
 			cout << "Invalid account format, skipping..." << endl << endl;
 			continue;
 		}
-		if (Row[0] == username && Row[1] == password) {
+		if (SplitString[0] == username && SplitString[1] == password) {
 			return true;
 		}
 	}
@@ -822,12 +829,39 @@ bool fileHandler::validateAccount(string username, string password) {
 
 //----------------------------------------------------------------------------------------------------------
 
+int keyToInt(int key) {
+	switch (key) {
+	case 48:
+		return 0;
+	case 49:
+		return 1;
+	case 50:
+		return 2;
+	case 51:
+		return 3;
+	case 52:
+		return 4;
+	case 53:
+		return 5;
+	case 54:
+		return 6;
+	case 55:
+		return 7;
+	case 56:
+		return 8;
+	case 57:
+		return 9;
+	default:
+		return -1;
+	}
+}
+
 int listenForInt() {
 	while (true) {
 		char key = _getch();
-		if (keyToInt.contains((int)key)) {
+		if (keyToInt((int)key) != -1) {
 			cin.clear();
-			return keyToInt[key];
+			return keyToInt(key);
 		}
 	}
 }
@@ -934,30 +968,35 @@ string getPropertyFromBook(bookProperty BookProperty, book Book) {
 	return "";
 }
 
-void sortBooksBy(vector<book>& books, bookProperty BookProperty) {
+void sortBooksBy(bookProperty BookProperty) {
+	if (BooksIndexed < 2) return;
 	int position = 0;
-	vector<long long int> comparisonArray;
-	comparisonArray.reserve(books.size());
-	for (int i = 0; i < books.size(); i++) {
-		comparisonArray.push_back(convertToComparisonINT(BookProperty, getPropertyFromBook(BookProperty, books[i])));
+	long long int comparisonArray[MAX_BOOKS];
+	long long int startComparisonInt;
+	for (int i = 0; i < BooksIndexed; i++) {
+		comparisonArray[i] = convertToComparisonINT(BookProperty, getPropertyFromBook(BookProperty, BookArray[i]));
 	}
-LABELSTARTSORT:
-	long long int smallest = comparisonArray[0];
-	int positionSmall = 0;
 
-	for (int i = 1; i < comparisonArray.size(); i++) {
-		if (smallest > comparisonArray[i]) {
-			smallest = comparisonArray[i];
-			positionSmall = i;
+	do {
+		long long int smallest = comparisonArray[position];
+		startComparisonInt = smallest;
+		int positionSmall = 0;
+
+		for (int i = position + 1; i < BooksIndexed; i++) {
+
+			if (smallest > comparisonArray[i]) {
+				smallest = comparisonArray[i];
+				positionSmall = i;
+			}
 		}
-	}
+		if (startComparisonInt == smallest) {
+			position++; continue;
+		}
+		
+		swap(BookArray[position], BookArray[positionSmall]);
+		
+		swap(comparisonArray[position], comparisonArray[positionSmall]);
+		position++;
 
-	books.insert(books.begin() + position, books[positionSmall + position]);
-	books.erase(books.begin() + positionSmall + position + 1);
-
-	comparisonArray.erase(comparisonArray.begin() + positionSmall);
-	position++;
-
-	if (!(comparisonArray.size() == 1))
-		goto LABELSTARTSORT;
+	} while (!(position == BooksIndexed - 1));		
 }
