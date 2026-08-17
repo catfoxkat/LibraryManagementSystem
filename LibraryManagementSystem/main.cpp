@@ -1,13 +1,17 @@
 #include<iostream>
+#include<ios>
 #include<iomanip>
 #include<string>
 #include<filesystem>
 #include<fstream>
 #include<conio.h> //for inputListener getch
-
-namespace fs = std::filesystem;
+#include<cstdlib>
+#include<cstdio>
+#include<utility>
 
 using namespace std;
+
+namespace fs = filesystem;
 
 enum bookProperty { // do not rearrange!! it will break select menus and file handling, GREATLY!
 	ISBN,
@@ -43,7 +47,7 @@ struct book {
 	string genre;
 	string language;
 
-	int pageCount = 0;
+	long long int pageCount = 0;
 	int available = 0; //how many available to borrow
 	int borrowed = 0; //how many currently borrowed
 };
@@ -51,14 +55,12 @@ struct book {
 void addBook();
 void removeBook();
 void editBook();
-void searchBook();
-void sortBook();
 void bookInterface();
 void bookSearchSubInterface();
-void displayAllBooks(bool sort = false, bookProperty BookProperty = ISBN);
+void displayAllBooks(bool sort = false, bookProperty BookProperty = ISBN, int selectionIndex = -1);
 void displayBookMenuInterface();
 void displayHeader();
-void displayBookDetails(int index, book Book);
+void displayBookDetails(int index, book Book, int selectionIndex = -1);
 void searchBookProperty();
 void sortBooksBy(bookProperty BookProperty);
 bookProperty selectBookProperty();
@@ -90,6 +92,8 @@ int listenForInt();
 char listenForChar();
 
 string listenForString();
+
+long long int getNumber();
 
 bool promptYesNo(string message);
 
@@ -125,9 +129,6 @@ menu displayBookMenu;
 
 //----------------------------------------------------------------------------------------------------------
 
-account currentUser;
-bool guest;
-
 const int MAX_BOOKS = 512;
 const int SPLIT_BY_MAX = 16;
 
@@ -137,6 +138,9 @@ const fs::path BOOKS_PATH = CURRENT_DIRECTORY / "books.txt";
 
 const string Delimiter = ", ";
 const string BookDelimiter = "|";
+
+account currentUser;
+bool guest;
 
 book BookArray[MAX_BOOKS];
 int BooksIndexed = 0;
@@ -299,18 +303,14 @@ void initDisplayBookMenu() {
 
 //----------------------------------------------------------------------------------------------------------
 
-bool validateAccountLogin(string username, string password) {
-	return validateAccount(username, password);
-}
-
-bool valueInRange(int value, int minRange, int maxRange) {
+static bool valueInRange(long long int value, long long int minRange, long long int maxRange) {
 	if (value >= minRange && value <= maxRange) {
 		return true;
 	}
 	return false;
 }
 
-bool validString(string str) { //checks if string has invalid chars (restricted to only alphanumeric chars)
+static bool validString(string str) { //checks if string has invalid chars (restricted to only alphanumeric chars)
 	for (int i = 0; i < str.length(); i++) {
 		int characterCode = (int)str[i];
 		// 0 - 9, A - Z, a - z
@@ -386,7 +386,7 @@ void loginFunction() {
 	string password = listenForString();
 
 	cout << "LOGIN WITH USERNAME OF " << username << " AND PASSWORD OF " << password << endl;
-	if (validateAccountLogin(username, password)) {
+	if (validateAccount(username, password)) {
 		cout << "LOGIN SUCCESS." << endl;
 		currentUser = getAccountByName(username);
 		return;
@@ -460,7 +460,11 @@ void displayHeader() {
 		<< setw(0) << endl;
 }
 
-void displayBookDetails(int index, book Book) {
+void displayBookDetails(int index, book Book, int selectionIndex) {
+	if (selectionIndex == index) {
+		cout << setw(6 + 13 + 64 + 24 + 16 + 10 + 4 + (5 * 3)) << setfill('=') << "" << endl;
+		cout << setfill(' ');
+	}
 	cout << right
 		<< "[" << setw(3) << index << "] "
 		<< left
@@ -475,10 +479,15 @@ void displayBookDetails(int index, book Book) {
 		<< setw(10) << Book.language.substr(0, 10)
 		<< " | "
 		<< setw(4) << to_string(Book.pageCount).substr(0, 4)
-		<< setw(0) << endl;
+		<< endl;
+	if (selectionIndex == index) {
+		cout << setw(6 + 13 + 64 + 24 + 16 + 10 + 4 + (5 * 3)) << setfill('=') << "" << endl;
+		cout << setfill(' ');
+	}
+	cout << setw(0);
 }
 
-void displayAllBooks(bool sort, bookProperty BookProperty) {
+void displayAllBooks(bool sort, bookProperty BookProperty, int selectionIndex) {
 	system("CLS");
 
 	if (sort) {
@@ -488,30 +497,60 @@ void displayAllBooks(bool sort, bookProperty BookProperty) {
 	displayHeader();
 	cout << endl;
 	for (int i = 0; i < BooksIndexed; i++) {
-		displayBookDetails(i + 1, BookArray[i]);
+		displayBookDetails(i + 1, BookArray[i], selectionIndex);
 	}
 }
 
 void displayBookMenuInterface() {
 	DisplayPage(&displayBookMenu, false);
 	bool exit = false;
+	bool actionMade = false;
+
+	long long int selectionIndex = -1;
+	bool sort = false;
+	bookProperty sortProperty = ISBN;
+
 	while (!exit) {
-		switch (listenForChar()) {
-		case 's':
-			cout << "Sort";
-			displayAllBooks(true, selectBookProperty());
-			DisplayPage(&displayBookMenu, false);
-			cout << "Displaying sorted";
-			break;
-		case 'x':
-			cout << "Select";
-			break;
-		case 'v':
-			cout << "View selected";
-			break;
-		case '0':
-			exit = true;
+		while (!actionMade) {
+			switch (listenForChar()) {
+			case 's':
+				cout << "Sort";
+				selectionIndex = -1; //just deselect the selected book unless you want the selection to follow where the book was sorted to
+				sort = true;
+				sortProperty = selectBookProperty();
+				actionMade = true;
+				break;
+			case 'x':
+				cout << "Input selection index" << endl;
+				selectionIndex = getNumber();
+				if (selectionIndex < 0 || selectionIndex > BooksIndexed - 1) {
+					selectionIndex = -2;
+				}
+				actionMade = true;
+				break;
+			case 'v':
+				cout << "View selected" << endl;
+				break;
+			case '0':
+				actionMade = true;
+				exit = true;	
+			}
 		}
+
+		displayAllBooks(sort, sortProperty, selectionIndex);
+		DisplayPage(&displayBookMenu, false);
+
+		if (sort) {
+			cout << "Displaying sorted" << endl;
+		}
+		if (selectionIndex == -2) {
+			cout << "INDEX OUT OF RANGE" << endl;
+		}
+
+		if (selectionIndex != -1) selectionIndex = -1; 
+		sort = false;
+		sortProperty = ISBN;
+		actionMade = false;
 	}
 }
 
@@ -561,7 +600,7 @@ void searchBookProperty() {
 
 //----------------------------------------------------------------------------------------------------------
 
-bool hasOnlyInt(string str) {
+static bool hasOnlyInt(string str) {
 	for (int i = 0; i < str.length(); i++) {
 		if (!valueInRange((int)str[i], 48, 57)) {
 			return false;
@@ -570,7 +609,7 @@ bool hasOnlyInt(string str) {
 	return true;
 }
 
-bool containsDelimiter(string str) {
+static bool containsDelimiter(string str) {
 	for (int i = 0; i < str.length(); i++) {
 		if (str[i] == '|') {
 			return true;
@@ -639,13 +678,12 @@ void addBook() {
 
 	do {
 		cout << "Enter number of pages: ";
-		string PAGECOUNT;
-		cin >> PAGECOUNT;
-		if (!hasOnlyInt(PAGECOUNT)) {
+		long long int PAGECOUNT = getNumber();
+		if (PAGECOUNT == -1) {
 			cout << "INVALID PAGECOUNT, PAGECOUNT cannot contain, negative, decimal or non numeric values." << endl;
 			continue;
 		}
-		newBook.pageCount = std::stoi(PAGECOUNT);
+		newBook.pageCount = PAGECOUNT;
 		appendNewBook(newBook);
 	} while (newBook.pageCount == 0);
 	
@@ -687,7 +725,7 @@ void initializeFiles() {
 }
 
 void appendNewAccount(string username, string password) {
-	ofstream accounts; accounts.open(ACCOUNTS_PATH, std::ios_base::app);
+	ofstream accounts; accounts.open(ACCOUNTS_PATH, ios_base::app);
 	accounts << username << Delimiter << password << ", 0" << endl;  //unsure if ", " should be used as a seperator. structure exp?: "[USR], [PWD], [PERMISSIONLVL]\n" 
 	accounts.close();
 }
@@ -696,7 +734,7 @@ void appendNewBook(book newBook)
 {
 	ofstream booksFile;
 
-	booksFile.open(BOOKS_PATH, std::ios_base::app);
+	booksFile.open(BOOKS_PATH, ios_base::app);
 
 	booksFile
 		<< newBook.ISBN << BookDelimiter
@@ -725,7 +763,7 @@ int splitByDelimiter(string str, string delimiter) {
 }
 
 account getAccountByName(string username) { //name pass role
-	ifstream accounts(ACCOUNTS_PATH, std::ios::in);
+	ifstream accounts(ACCOUNTS_PATH, ios::in);
 	string line;
 	while (getline(accounts, line)) {
 		int splits = splitByDelimiter(line, Delimiter);
@@ -736,7 +774,7 @@ account getAccountByName(string username) { //name pass role
 		if (SplitString[0] == username) {
 			account givenAcc;
 			givenAcc.exists = true;
-			givenAcc.permissionLevel = std::stoi(SplitString[2]);
+			givenAcc.permissionLevel = stoi(SplitString[2]);
 			givenAcc.username = SplitString[0];
 			return givenAcc;
 		}
@@ -746,7 +784,7 @@ account getAccountByName(string username) { //name pass role
 }
 
 void getBooksBy(bookProperty BookProperty, string Property) {
-	ifstream books(BOOKS_PATH, std::ios::in);
+	ifstream books(BOOKS_PATH, ios::in);
 	string line;
 	int i = 0;
 	while (getline(books, line)) {
@@ -759,7 +797,7 @@ void getBooksBy(bookProperty BookProperty, string Property) {
 			Book.author = SplitString[2];
 			Book.genre = SplitString[3];
 			Book.language = SplitString[4];
-			Book.pageCount = std::stoi(SplitString[5]);
+			Book.pageCount = stoll(SplitString[5]);
 			BookArray[i] = Book;
 			i++;
 		}
@@ -771,7 +809,7 @@ void getBooksBy(bookProperty BookProperty, string Property) {
 }
 
 void getAllBooks() {
-	ifstream books(BOOKS_PATH, std::ios::in);
+	ifstream books(BOOKS_PATH, ios::in);
 	string line;
 	int i = 0;
 	while (getline(books, line)) {
@@ -782,7 +820,7 @@ void getAllBooks() {
 		Book.author = SplitString[2];
 		Book.genre = SplitString[3];
 		Book.language = SplitString[4];
-		Book.pageCount = std::stoi(SplitString[5]);
+		Book.pageCount = stoll(SplitString[5]);
 		BookArray[i] = Book;
 		i++;
 	}
@@ -792,11 +830,11 @@ void getAllBooks() {
 }
 
 void removeBook(string ISBN) { //remove line with the matched ISBN
-	ifstream books(BOOKS_PATH, std::ios::in);
+	ifstream books(BOOKS_PATH, ios::in);
 	ofstream newBooks;
 	newBooks.open("temp.txt");
 	string line;
-	while (std::getline(books, line)) {
+	while (getline(books, line)) {
 		splitByDelimiter(line, BookDelimiter);
 		if (SplitString[0] != ISBN) {
 			newBooks << line << endl;
@@ -811,7 +849,7 @@ void removeBook(string ISBN) { //remove line with the matched ISBN
 }
 
 bool validateAccount(string username, string password) {
-	ifstream accounts(ACCOUNTS_PATH, std::ios::in);
+	ifstream accounts(ACCOUNTS_PATH, ios::in);
 	string line;
 	while (getline(accounts, line)) {
 		int splits = splitByDelimiter(line, Delimiter);
@@ -829,7 +867,7 @@ bool validateAccount(string username, string password) {
 
 //----------------------------------------------------------------------------------------------------------
 
-int keyToInt(int key) {
+static int keyToInt(int key) {
 	switch (key) {
 	case 48:
 		return 0;
@@ -868,6 +906,15 @@ int listenForInt() {
 
 char listenForChar() {
 	return char(_getch());
+}
+
+long long int getNumber() {
+	try {
+		return stoll(listenForString());
+	}
+	catch (...) {
+		return -1;
+	}
 }
 
 string listenForString() {
@@ -926,14 +973,14 @@ void DisplayPage(menu* Menu, bool clearScreen) {
 
 //----------------------------------------------------------------------------------------------------------
 
-long long int convertToComparisonINT(bookProperty BookProperty, string Str) { //only uses first letter of string ASCII code, or entire int
+static long long int convertToComparisonINT(bookProperty BookProperty, string Str) { //only uses first letter of string ASCII code, or entire int
 	if (Str.length() == 0 || Str == "") {
 		return 0;
 	}
 	switch (BookProperty) {
 	case ISBN:
 	case PageCount:
-		return std::stoll(Str);
+		return stoll(Str);
 
 	case Title:
 	case Genre:
@@ -947,7 +994,7 @@ long long int convertToComparisonINT(bookProperty BookProperty, string Str) { //
 	}
 }
 
-string getPropertyFromBook(bookProperty BookProperty, book Book) {
+static string getPropertyFromBook(bookProperty BookProperty, book Book) {
 	switch (BookProperty) {
 	case ISBN:
 		return Book.ISBN;
