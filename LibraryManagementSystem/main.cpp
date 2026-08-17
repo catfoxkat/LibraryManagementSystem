@@ -96,19 +96,19 @@ bool promptYesNo(string message);
 //----------------------------------------------------------------------------------------------------------
 
 struct menu {
-	void SetTitle(string title);
-
-	void SetDescription(string title);
-
-	void AppendNav(string navText, int overwriteIndex = -1, char overwriteChar = '?');
-
-	void DisplayPage(bool clearScreen = true);
-
 	string PageTitle;
 	string PageDesc;
 	string PageNav = "";
 	int PageNavIndex = 1;
 };
+
+void SetTitle(menu* Menu, string title);
+
+void SetDescription(menu* Menu, string title);
+
+void AppendNav(menu* Menu, string navText, int overwriteIndex = -1, char overwriteChar = '?');
+
+void DisplayPage(menu* Menu, bool clearScreen = true);
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -129,6 +129,7 @@ account currentUser;
 bool guest;
 
 const int MAX_BOOKS = 512;
+const int SPLIT_BY_MAX = 16;
 
 const fs::path CURRENT_DIRECTORY = fs::current_path();
 const fs::path ACCOUNTS_PATH = CURRENT_DIRECTORY / "accounts.txt";
@@ -140,16 +141,18 @@ const string BookDelimiter = "|";
 book BookArray[MAX_BOOKS];
 int BooksIndexed = 0;
 
-string SplitString[16];
+string SplitString[SPLIT_BY_MAX];
 
 int main() {
 	initializeFiles();
 	initMenu_Main();
 
 	cin.ignore();
+	
+	bool exitProgram = false;
 
-	while (true) {
-		Menu_Main.DisplayPage();
+	while (!exitProgram) {
+		DisplayPage(&Menu_Main);
 		switch (listenForInt()) {
 		case 1:
 			cout << "entering login function";
@@ -172,8 +175,8 @@ int main() {
 			currentUser.permissionLevel = -1;
 			break;
 		case 0:
-			return 0;
-		default: continue;
+			exitProgram = true;
+			break;
 		}
 
 		if (currentUser.exists || guest) {
@@ -189,16 +192,18 @@ void LoggedIn() {
 	initBookMenu();
 	initDisplayBookMenu();
 
-	while (true) {
-		Menu_Main_Logged.DisplayPage();
+	bool exitMenu_Main = false;
+
+	while (!exitMenu_Main) {
+		DisplayPage(&Menu_Main_Logged);
 		switch (listenForInt()) {
 			cout << "waiting";
 		case 0:
 			cout << "CLEARING";
 			guest = false;
 			currentUser = account();
-			return;
-
+			exitMenu_Main = true;
+			break;
 		case 1:
 			cout << "BROWSE";
 			bookInterface();
@@ -218,24 +223,23 @@ void LoggedIn() {
 		case 6:
 			if (currentUser.permissionLevel != 1) { break; }
 			break;
-
-		default: continue;
 		}
 	}
+	return;
 }
 
 void initMenu_Main() {
 	Menu_Main = menu();
-	Menu_Main.SetTitle("Welcome to the library of [name here]!");
-	Menu_Main.AppendNav("Login");
-	Menu_Main.AppendNav("Register");
-	Menu_Main.AppendNav("Browse as guest");
-	Menu_Main.AppendNav("Quit", 0);
+	SetTitle(&Menu_Main, "Welcome to the library of [name here]!");
+	AppendNav(&Menu_Main, "Login");
+	AppendNav(&Menu_Main, "Register");
+	AppendNav(&Menu_Main, "Browse as guest");
+	AppendNav(&Menu_Main, "Quit", 0);
 }
 
 void initMenu_Main_Logged() {
 	Menu_Main_Logged = menu();
-	Menu_Main_Logged.SetTitle("Hello, " + currentUser.username + "!");
+	SetTitle(&Menu_Main_Logged, "Hello, " + currentUser.username + "!");
 
 	string accountType;
 	switch (currentUser.permissionLevel) {
@@ -253,44 +257,44 @@ void initMenu_Main_Logged() {
 		break;
 	}
 
-	Menu_Main_Logged.SetDescription("Permission level: " + to_string(currentUser.permissionLevel) + " (" + accountType + ")\n");
+	SetDescription(&Menu_Main_Logged, "Permission level: " + to_string(currentUser.permissionLevel) + " (" + accountType + ")\n");
 
-	Menu_Main_Logged.AppendNav("Browse books");
-	Menu_Main_Logged.AppendNav("Facility booking");
-	Menu_Main_Logged.AppendNav("Feedback");
+	AppendNav(&Menu_Main_Logged, "Browse books");
+	AppendNav(&Menu_Main_Logged, "Facility booking");
+	AppendNav(&Menu_Main_Logged, "Feedback");
 	if (currentUser.permissionLevel == 1) {
-		Menu_Main_Logged.AppendNav("Modify books");
-		Menu_Main_Logged.AppendNav("Manage users");
-		Menu_Main_Logged.AppendNav("Analysis");
+		AppendNav(&Menu_Main_Logged, "Modify books");
+		AppendNav(&Menu_Main_Logged, "Manage users");
+		AppendNav(&Menu_Main_Logged, "Analysis");
 	}
-	Menu_Main_Logged.AppendNav("Log out", 0);
+	AppendNav(&Menu_Main_Logged, "Log out", 0);
 }
 
 void initBookMenu() {
 	bookMenu = menu();
-	bookMenu.SetTitle("Books");
-	bookMenu.AppendNav("Search book");
+	SetTitle(&bookMenu, "Books");
+	AppendNav(&bookMenu, "Search book");
 	if (currentUser.permissionLevel == 1) {
-		bookMenu.AppendNav("Add book");
-		bookMenu.AppendNav("Remove book");
+		AppendNav(&bookMenu, "Add book");
+		AppendNav(&bookMenu, "Remove book");
 	}
-	bookMenu.AppendNav("Exit", 0);
+	AppendNav(&bookMenu, "Exit", 0);
 }
 
 void initBookSearchMenu() {
 	bookSearchMenu = menu();
-	bookSearchMenu.SetTitle("Search book");
-	bookSearchMenu.AppendNav("Display all books");
-	bookSearchMenu.AppendNav("By Property");
-	bookSearchMenu.AppendNav("Exit", 0);
+	SetTitle(&bookSearchMenu, "Search book");
+	AppendNav(&bookSearchMenu, "Display all books");
+	AppendNav(&bookSearchMenu, "By Property");
+	AppendNav(&bookSearchMenu, "Exit", 0);
 }
 
 void initDisplayBookMenu() {
 	displayBookMenu = menu();
-	displayBookMenu.AppendNav("Sort", -1, 's');
-	displayBookMenu.AppendNav("Select", -1, 'x');
-	displayBookMenu.AppendNav("View selected", -1, 'v');
-	displayBookMenu.AppendNav("Quit", 0);
+	AppendNav(&displayBookMenu, "Sort", -1, 's');
+	AppendNav(&displayBookMenu, "Select", -1, 'x');
+	AppendNav(&displayBookMenu, "View selected", -1, 'v');
+	AppendNav(&displayBookMenu, "Quit", 0);
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -325,25 +329,24 @@ void registerFunction() {
 	system("cls");
 
 	string username, password;
-
-	while (true) {
+	bool pass = false;
+	while (!pass) {
 		cout << "Input username (Alphanumeric characters only, must be between 3 to 36 characters in length.)\n"; //probably add requirements like "Must be x chars, no symbols"
 		username = listenForString(); //add check for username conflicts
 
 		if (!validString(username)) {
 			cout << "Invalid characters.\n\n";
-			continue;
 		}
-		if (!valueInRange(static_cast<int>(username.length()), 3, 36)) {
+		else if (!valueInRange(static_cast<int>(username.length()), 3, 36)) {
 			cout << "Username must be between 3 to 36 characters in length.\n\n";
-			continue;
 		}
 		else {
-			break;
+			pass = true;
 		}
-	}
 
-	while (true) {
+	}
+	pass = false;
+	while (!pass) {
 		cout << "Input password (Alphanumeric characters only, must be between 6 to 36 characters in length.)\n";
 		password = listenForString();
 		cout << "Input confirm password\n";
@@ -354,14 +357,12 @@ void registerFunction() {
 		}
 		if (!validString(password)) {
 			cout << "Invalid characters.\n\n";
-			continue;
 		}
-		if (!valueInRange(static_cast<int>(password.length()), 6, 36)) {
+		else if (!valueInRange(static_cast<int>(password.length()), 6, 36)) {
 			cout << "Password must be between 6 to 36 characters in length.\n\n";
-			continue;
 		}
 		else {
-			break;
+			pass = true;
 		}
 
 	}
@@ -371,38 +372,37 @@ void registerFunction() {
 }
 
 void loginFunction() {
-	while (true) {
-		if (!promptYesNo("Continue to login? [y/n]\n")) {
-			currentUser = account();
-			return;
-		}
+	if (!promptYesNo("Continue to login? [y/n]\n")) {
+		currentUser = account();
+		return;
+	}
 
-		system("cls");
+	system("cls");
 
-		cout << "Input username\n";
-		string username = listenForString();
+	cout << "Input username\n";
+	string username = listenForString();
 
-		cout << "Input password\n";
-		string password = listenForString();
+	cout << "Input password\n";
+	string password = listenForString();
 
-		cout << "LOGIN WITH USERNAME OF " << username << " AND PASSWORD OF " << password << endl;
-		if (validateAccountLogin(username, password)) {
-			cout << "LOGIN SUCCESS." << endl;
-			currentUser = getAccountByName(username);
-			return;
-		}
-		else {
-			cout << "INVALID USERNAME OR PASSWORD" << endl;
-			continue;
-		}
+	cout << "LOGIN WITH USERNAME OF " << username << " AND PASSWORD OF " << password << endl;
+	if (validateAccountLogin(username, password)) {
+		cout << "LOGIN SUCCESS." << endl;
+		currentUser = getAccountByName(username);
+		return;
+	}
+	else {
+		cout << "INVALID USERNAME OR PASSWORD" << endl;
+		loginFunction();
 	}
 }
 
 //----------------------------------------------------------------------------------------------------------
 
 void bookInterface() {
-	while (true) {
-		bookMenu.DisplayPage();
+	bool exit = false;
+	while (!exit) {
+		DisplayPage(&bookMenu);
 		switch (listenForInt()) {
 		case 1:
 			bookSearchSubInterface();
@@ -418,14 +418,15 @@ void bookInterface() {
 			cin.ignore();
 			break;
 		case 0:
-			return;
+			exit = true;
 		}
 	}
 }
 
 void bookSearchSubInterface() {
-	while (true) {
-		bookSearchMenu.DisplayPage();
+	bool exit = false;
+	while (!exit) {
+		DisplayPage(&bookSearchMenu);
 		switch (listenForInt()) {
 		case 1: {
 			getAllBooks();
@@ -437,7 +438,7 @@ void bookSearchSubInterface() {
 			searchBookProperty();
 			break;
 		case 0:
-			return;
+			exit = true;
 		}
 	}
 }
@@ -492,13 +493,14 @@ void displayAllBooks(bool sort, bookProperty BookProperty) {
 }
 
 void displayBookMenuInterface() {
-	displayBookMenu.DisplayPage(false);
-	while (true) {
+	DisplayPage(&displayBookMenu, false);
+	bool exit = false;
+	while (!exit) {
 		switch (listenForChar()) {
 		case 's':
 			cout << "Sort";
 			displayAllBooks(true, selectBookProperty());
-			displayBookMenu.DisplayPage(false);
+			DisplayPage(&displayBookMenu, false);
 			cout << "Displaying sorted";
 			break;
 		case 'x':
@@ -508,9 +510,7 @@ void displayBookMenuInterface() {
 			cout << "View selected";
 			break;
 		case '0':
-			return;
-		default:
-			continue;
+			exit = true;
 		}
 	}
 }
@@ -895,33 +895,33 @@ bool promptYesNo(string message) {
 
 //----------------------------------------------------------------------------------------------------------
 
-void menu::SetTitle(string title) {
-	PageTitle = title;
+void SetTitle(menu* Menu, string title) {
+	Menu->PageTitle = title;
 }
 
-void menu::SetDescription(string desc) {
-	PageDesc = desc;
+void SetDescription(menu* Menu, string desc) {
+	Menu->PageDesc = desc;
 }
 
-void menu::AppendNav(string navText, int overwriteIndex, char overwriteChar) {
+void AppendNav(menu* Menu, string navText, int overwriteIndex, char overwriteChar) {
 	if (overwriteChar != '?') {
 		string str = "[] " + navText + "\n"; str.insert(str.begin() + 1, overwriteChar);
-		PageNav.append(str);
+		Menu->PageNav.append(str);
 		return;
 	}
 	if (overwriteIndex != -1) {
-		PageNav.append("[" + to_string(overwriteIndex) + "] " + navText + "\n");
+		Menu->PageNav.append("[" + to_string(overwriteIndex) + "] " + navText + "\n");
 		return;
 	}
-	PageNav.append("[" + to_string(PageNavIndex) + "] " + navText + "\n");
-	PageNavIndex++;
+	Menu->PageNav.append("[" + to_string(Menu->PageNavIndex) + "] " + navText + "\n");
+	Menu->PageNavIndex++;
 }
 
-void menu::DisplayPage(bool clearScreen) {
+void DisplayPage(menu* Menu, bool clearScreen) {
 	if (clearScreen) {
 		system("cls");
 	}
-	cout << PageTitle << endl << PageDesc << endl << PageNav << endl;
+	cout << Menu->PageTitle << endl << Menu->PageDesc << endl << Menu->PageNav << endl;
 }
 
 //----------------------------------------------------------------------------------------------------------
