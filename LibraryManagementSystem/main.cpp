@@ -8,6 +8,8 @@
 #include<cstdlib>
 #include<cstdio>
 #include<utility>
+#include<format>
+#include<chrono> //for getting current year
 
 using namespace std;
 
@@ -19,7 +21,9 @@ enum bookProperty { // do not rearrange!! it will break select menus and file ha
 	Author,
 	Genre,
 	Language,
-	PageCount
+	PageCount,
+	Available,
+	Borrowed
 };
 
 //----------------------------------------------------------------------------------------------------------
@@ -54,7 +58,7 @@ struct book {
 
 void addBook();
 void removeBook();
-void editBook();
+void editBook(book *Book);
 void bookInterface();
 void bookSearchSubInterface();
 void displayAllBooks(bool sort = false, bookProperty BookProperty = ISBN, int selectionIndex = -1);
@@ -64,6 +68,29 @@ void displayBookDetails(int index, book Book, int selectionIndex = -1);
 void searchBookProperty();
 void sortBooksBy(bookProperty BookProperty);
 bookProperty selectBookProperty();
+void viewSelectBook(book currentSelectedBook);
+
+//----------------------------------------------------------------------------------------------------------
+
+const int currentYear = stoi(format("{:%Y}", chrono::system_clock::now()));
+const string facilityTypes[3] = { "Discussion room", "Study room", "Computer lab" };
+const int facilityTypesMaxPax[3] = { 6, 2, 10 }; // max occupancy per room
+const int facilityTypeRoomAmount[3] = { 30, 60, 1 }; // how many rooms are there in total, computer lab has only 1 room to test overlapping times
+const int maximumBookingDuration = 3; // how long each booking can last
+const int bookingHourStart = 8; // earliest a booking can start
+const int bookingHourEnd = 20; // latest a booking can end at
+
+struct date {
+	int day;
+	int month;
+	int year;
+};
+
+int getMonthMaxDate(int month);
+
+bool stringToDate(string str, date* Date);
+
+void facilityBookingInterface();
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -84,6 +111,8 @@ void removeBook(string ISBN);
 bool validateAccount(string username, string password);
 
 int splitByDelimiter(string str, string delimiter);
+
+void modifyBook(book *Book, bookProperty BookProperty, string Value);
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -121,12 +150,18 @@ void initMenu_Main_Logged();
 void initBookMenu();
 void initBookSearchMenu();
 void initDisplayBookMenu();
+void initViewSelectedBookMenu(book Book);
+void initFacilityBookingMenu();
+void initFacilityBookingMenuViewBooking();
+
 menu Menu_Main;
 menu Menu_Main_Logged;
 menu bookMenu;
 menu bookSearchMenu;
 menu displayBookMenu;
-
+menu viewSelectedBookMenu;
+menu facilityBookingMenu;
+menu facilityBookingMenuViewBooking;
 //----------------------------------------------------------------------------------------------------------
 
 const int MAX_BOOKS = 512;
@@ -150,6 +185,8 @@ string SplitString[SPLIT_BY_MAX];
 int main() {
 	initializeFiles();
 	initMenu_Main();
+	initFacilityBookingMenu();
+	//initFacilityBookingMenuViewBooking();
 
 	cin.ignore();
 	
@@ -213,19 +250,25 @@ void LoggedIn() {
 			bookInterface();
 			break;
 		case 2:
-			cout << "FACILITY BOOKING";
+			if (currentUser.permissionLevel >= 0) {
+				cout << "FACILITY BOOKING";
+				facilityBookingInterface();
+			}
 			break;
 		case 3:
-			cout << "FEEDBACK";
+			if (currentUser.permissionLevel >= 0) {
+				cout << "FEEDBACK";
+			}
 			break;
 		case 4:
-			if (currentUser.permissionLevel != 1) { break; }
+			if (currentUser.permissionLevel == 1) { 
+				cout << "Manage users";
+			}
 			break;
 		case 5:
-			if (currentUser.permissionLevel != 1) { break; }
-			break;
-		case 6:
-			if (currentUser.permissionLevel != 1) { break; }
+			if (currentUser.permissionLevel == 1) {
+				cout << "Analysis";
+			}
 			break;
 		}
 	}
@@ -264,10 +307,11 @@ void initMenu_Main_Logged() {
 	SetDescription(&Menu_Main_Logged, "Permission level: " + to_string(currentUser.permissionLevel) + " (" + accountType + ")\n");
 
 	AppendNav(&Menu_Main_Logged, "Browse books");
-	AppendNav(&Menu_Main_Logged, "Facility booking");
-	AppendNav(&Menu_Main_Logged, "Feedback");
+	if (currentUser.permissionLevel >= 0) {
+		AppendNav(&Menu_Main_Logged, "Facility booking");
+		AppendNav(&Menu_Main_Logged, "Feedback");
+	}
 	if (currentUser.permissionLevel == 1) {
-		AppendNav(&Menu_Main_Logged, "Modify books");
 		AppendNav(&Menu_Main_Logged, "Manage users");
 		AppendNav(&Menu_Main_Logged, "Analysis");
 	}
@@ -300,6 +344,40 @@ void initDisplayBookMenu() {
 	AppendNav(&displayBookMenu, "View selected", -1, 'v');
 	AppendNav(&displayBookMenu, "Quit", 0);
 }
+
+void initViewSelectedBookMenu(book Book) {
+	viewSelectedBookMenu = menu();
+	SetTitle(&viewSelectedBookMenu, "Selected book: " + Book.title);
+	string Description =
+		"\n ISBN code\t: " + Book.ISBN +
+		"\n Title\t\t: " + Book.title +
+		"\n Author\t\t: " + Book.author +
+		"\n Genre\t\t: " + Book.genre +
+		"\n Language\t: " + Book.language +
+		"\n Page count\t: " + to_string(Book.pageCount) +
+		"\n Available\t: " + to_string(Book.available) +
+		"\n Borrowed\t: " + to_string(Book.borrowed) +
+		"\n";
+	SetDescription(&viewSelectedBookMenu, Description);
+
+	if (currentUser.permissionLevel >= 0) {
+		AppendNav(&viewSelectedBookMenu, "Borrow book");
+	}
+	if (currentUser.permissionLevel == 1) {
+		AppendNav(&viewSelectedBookMenu, "Edit book details");
+		AppendNav(&viewSelectedBookMenu, "Delete book");
+	}
+	AppendNav(&viewSelectedBookMenu, "Exit", 0);
+}
+
+void initFacilityBookingMenu() {
+	facilityBookingMenu = menu();
+	SetTitle(&facilityBookingMenu, "Facility booking");
+	AppendNav(&facilityBookingMenu, "Create booking");
+	AppendNav(&facilityBookingMenu, "View booking");
+	AppendNav(&facilityBookingMenu, "Exit", 0);
+}
+
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -419,6 +497,7 @@ void bookInterface() {
 			break;
 		case 0:
 			exit = true;
+			break;
 		}
 	}
 }
@@ -439,6 +518,7 @@ void bookSearchSubInterface() {
 			break;
 		case 0:
 			exit = true;
+			break;
 		}
 	}
 }
@@ -507,6 +587,7 @@ void displayBookMenuInterface() {
 	bool actionMade = false;
 
 	long long int selectionIndex = -1;
+	book currentSelectedBook;
 	bool sort = false;
 	bookProperty sortProperty = ISBN;
 
@@ -516,6 +597,7 @@ void displayBookMenuInterface() {
 			case 's':
 				cout << "Sort";
 				selectionIndex = -1; //just deselect the selected book unless you want the selection to follow where the book was sorted to
+				currentSelectedBook = book();
 				sort = true;
 				sortProperty = selectBookProperty();
 				actionMade = true;
@@ -523,13 +605,20 @@ void displayBookMenuInterface() {
 			case 'x':
 				cout << "Input selection index" << endl;
 				selectionIndex = getNumber();
-				if (selectionIndex < 0 || selectionIndex > BooksIndexed - 1) {
+				if (selectionIndex <= 0 || selectionIndex > BooksIndexed) {
 					selectionIndex = -2;
+					currentSelectedBook = book();
 				}
+				else {
+					currentSelectedBook = BookArray[selectionIndex - 1];
+				}
+				
 				actionMade = true;
 				break;
 			case 'v':
 				cout << "View selected" << endl;
+				viewSelectBook(currentSelectedBook);
+				actionMade = true;
 				break;
 			case '0':
 				actionMade = true;
@@ -537,8 +626,11 @@ void displayBookMenuInterface() {
 			}
 		}
 
-		displayAllBooks(sort, sortProperty, selectionIndex);
-		DisplayPage(&displayBookMenu, false);
+		if (!exit) {
+			getAllBooks();
+			displayAllBooks(sort, sortProperty, (int)selectionIndex);
+			DisplayPage(&displayBookMenu, false);
+		}
 
 		if (sort) {
 			cout << "Displaying sorted" << endl;
@@ -566,7 +658,7 @@ bookProperty selectBookProperty() {
 	int num;
 	while (true) {
 		num = listenForInt();
-		if (num > 6) {
+		if (num > 6 || num < 1) {
 			continue;
 		}
 		break;
@@ -596,6 +688,157 @@ void searchBookProperty() {
 	}
 	displayBookMenuInterface();
 	return;
+}
+
+void viewSelectBook(book currentSelectedBook) {
+	bool exit = false;
+	while (!exit) {
+		initViewSelectedBookMenu(currentSelectedBook);
+		DisplayPage(&viewSelectedBookMenu);
+		switch (listenForInt()) {
+		case 1: 
+			if (currentUser.permissionLevel > 1) {
+				cout << "1 BORROW FUNCTION HERE";
+			}
+			break;
+		case 2:
+			if (currentUser.permissionLevel == 1) {
+				editBook(&currentSelectedBook);
+			}
+			break;
+		case 3:
+			if (currentUser.permissionLevel == 1) {
+				removeBook(currentSelectedBook.ISBN);
+				exit = true;
+			}
+			break;
+		case 0:
+			exit = true;
+			break;
+		}
+	}
+ }
+
+//----------------------------------------------------------------------------------------------------------
+
+int getMonthMaxDate(int month) {
+	switch (month) {
+	case 1:
+	case 3:
+	case 5:
+	case 7:
+	case 8:
+	case 10:
+	case 12:
+		return 31;
+	case 4:
+	case 6:
+	case 9:
+	case 11:
+		return 30;
+	case 2:
+		return 28;
+	default:
+		throw "INVALID MONTH";
+	}
+}
+
+bool stringToDate(string str, date* Date) { // DD/MM/YYYY // DOES NOT ACCOUNT FOR LEAP YEARS
+	if (splitByDelimiter(str, "/") != 3) {
+		return false;
+	}
+
+	try {
+		Date->month = stoi(SplitString[1]);
+		if (!valueInRange(Date->month, 1, 12))
+			return false;
+		Date->day = stoi(SplitString[0]);
+		if (!valueInRange(Date->day, 1, getMonthMaxDate(Date->month)))
+			return false;
+		Date->year = stoi(SplitString[2]);
+		if (Date->year != currentYear) //must be same as current year
+			return false;
+	}
+	catch (...) {
+		return false;
+	}
+	return true;
+	
+}
+
+void facilityBookingInterface() {
+	DisplayPage(&facilityBookingMenu);
+	bool exit = false;
+	while (!exit) {
+		switch (listenForInt()) {
+		case 1: {
+			system("CLS");
+
+			cout << "Please select a facility type" << endl
+				<< "[1] Discussion room" << endl //6
+				<< "[2] Study room" << endl //2
+				<< "[3] Computer lab" << endl; //10
+
+			int chosenType = 0;
+			do {
+				chosenType = listenForInt();
+				if (!(chosenType >= 1 && chosenType <= 3))
+					chosenType = 0;
+
+			} while (chosenType == 0);
+
+			system("CLS");
+			cout << "-> Selected facility type \t: " << facilityTypes[chosenType - 1] << endl << endl;
+
+			int bookingPersonsAmount = 0;
+
+			do {
+				cout << "Number of persons (max: " << facilityTypesMaxPax[chosenType - 1] << "): ";
+				bookingPersonsAmount = getNumber();
+				if (bookingPersonsAmount == -1) {
+					cout << "INVALID NUMBER, number of persons cannot be zero, contain, negative, decimal or non numeric values." << endl;
+					bookingPersonsAmount = 0;
+					continue;
+				}
+				if (!valueInRange(bookingPersonsAmount, 1, facilityTypesMaxPax[chosenType - 1])) {
+					cout << "INVALID NUMBER, number of persons must be at least 1 but no more than set maximum." << endl;
+					bookingPersonsAmount = 0;
+					continue;
+				}
+			} while (bookingPersonsAmount == 0);
+
+			system("CLS");
+			cout << "-> Selected facility type \t: " << facilityTypes[chosenType - 1] << endl;
+			cout << "-> Number of persons \t\t: " << bookingPersonsAmount << endl << endl;
+
+			date Date;
+			bool validDate = false;
+			do {
+				cout << "Input Date of booking (DD/MM/YYYY): ";
+				validDate = stringToDate(listenForString(), &Date);
+				if (!validDate)
+					cout << "Invalid date or format." << endl;
+			} while (!validDate);
+
+			system("CLS");
+			cout << "-> Selected facility type \t: " << facilityTypes[chosenType - 1] << endl;
+			cout << "-> Number of persons \t\t: " << bookingPersonsAmount << endl;
+			cout << "-> Selected date \t\t: " << Date.day << "/" << Date.month << "/" << Date.year << endl << endl;
+			cout << "Meow!";
+			cin.ignore();
+			break;
+		}
+		case 2:
+			break;
+		case 0:
+			exit = true;
+			break;
+		}
+
+		if (!exit) {
+			DisplayPage(&facilityBookingMenu, false);
+		}
+	}
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -680,7 +923,7 @@ void addBook() {
 		cout << "Enter number of pages: ";
 		long long int PAGECOUNT = getNumber();
 		if (PAGECOUNT == -1) {
-			cout << "INVALID PAGECOUNT, PAGECOUNT cannot contain, negative, decimal or non numeric values." << endl;
+			cout << "INVALID PAGECOUNT, PAGECOUNT cannot be zero, contain, negative, decimal or non numeric values." << endl;
 			continue;
 		}
 		newBook.pageCount = PAGECOUNT;
@@ -695,6 +938,52 @@ void addBook() {
 void removeBook() {
 	cout << "Enter ISBN of book to remove: ";
 	removeBook(listenForString());
+}
+
+void editBook(book *Book) {
+	cout << "Select data to modify" << endl
+		<< "[1] ISBN" << endl
+		<< "[2] Title" << endl
+		<< "[3] Author" << endl
+		<< "[4] Genre" << endl
+		<< "[5] Language" << endl
+		<< "[6] Pagecount" << endl
+		<< "[7] Available" << endl
+		<< "[8] Borrowed" << endl;
+	int sel = 0;
+	do {
+		sel = listenForInt();
+		if (!valueInRange(sel, 1, 8))
+			sel = 0;
+	} while (sel == 0);
+	bookProperty BookProperty = bookProperty(sel - 1);
+
+	
+	
+	string value = "";
+	do {
+		cout << "Input new value: ";
+		value = listenForString();
+		if (BookProperty == ISBN && !((value.length() == 10 || value.length() == 13) && hasOnlyInt(value))) {
+			value = "";
+			cout << "Invalid Value! ISBN Value be 10 or 13 numbers long and only have numeric values." << endl;
+		}
+		else continue;
+		
+		if ((BookProperty == PageCount || BookProperty == Available || BookProperty ==  Borrowed) && !hasOnlyInt(value)) {
+			value = "";
+			cout << "Invalid Value! Value can only have numeric values." << endl;
+		}
+
+		if (containsDelimiter(value)) {
+			value = "";
+			cout << "Invalid Value! Value cannot contain delimiter." << endl;
+		}
+		else continue;
+	} while (value == "");
+
+	modifyBook(Book, BookProperty, value);
+	return;
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -742,7 +1031,9 @@ void appendNewBook(book newBook)
 		<< newBook.author << BookDelimiter
 		<< newBook.genre << BookDelimiter
 		<< newBook.language << BookDelimiter
-		<< newBook.pageCount
+		<< newBook.pageCount << BookDelimiter
+		<< 0 << BookDelimiter
+		<< 0 << BookDelimiter
 		<< endl;
 
 	booksFile.close();
@@ -798,6 +1089,8 @@ void getBooksBy(bookProperty BookProperty, string Property) {
 			Book.genre = SplitString[3];
 			Book.language = SplitString[4];
 			Book.pageCount = stoll(SplitString[5]);
+			Book.available = stoi(SplitString[6]);
+			Book.borrowed = stoi(SplitString[7]);
 			BookArray[i] = Book;
 			i++;
 		}
@@ -821,6 +1114,8 @@ void getAllBooks() {
 		Book.genre = SplitString[3];
 		Book.language = SplitString[4];
 		Book.pageCount = stoll(SplitString[5]);
+		Book.available = stoi(SplitString[6]);
+		Book.borrowed = stoi(SplitString[7]);
 		BookArray[i] = Book;
 		i++;
 	}
@@ -846,6 +1141,7 @@ void removeBook(string ISBN) { //remove line with the matched ISBN
 
 	remove("books.txt");
 	rename("temp.txt", fs::current_path() / "books.txt");
+	return;
 }
 
 bool validateAccount(string username, string password) {
@@ -863,6 +1159,69 @@ bool validateAccount(string username, string password) {
 	}
 
 	return false;
+}
+
+void modifyBook(book *Book, bookProperty BookProperty, string Value) {
+	string comparisonISBN = "";
+	switch (BookProperty) {
+	case ISBN:
+		comparisonISBN = Book->ISBN;
+		Book->ISBN = Value;
+		break;
+	case Title:
+		Book->title = Value;
+		break;
+	case Author:
+		Book->author = Value;
+		break;
+	case Genre:
+		Book->genre = Value;
+		break;
+	case Language:
+		Book->language = Value;
+		break;
+	case PageCount:
+		Book->pageCount = stoi(Value);
+		break;
+	case Available:
+		Book->available= stoi(Value);
+		break;
+	case Borrowed:
+		Book->borrowed = stoi(Value);
+		break;
+	}
+
+	ifstream books(BOOKS_PATH, ios::in);
+	ofstream newBooks;
+	newBooks.open("temp.txt");
+	string line;
+	if (comparisonISBN == "")
+		comparisonISBN = Book->ISBN;
+
+	while (getline(books, line)) {
+		splitByDelimiter(line, BookDelimiter);
+		if (SplitString[0] != Book->ISBN && SplitString[0] != comparisonISBN) {
+			newBooks << line << endl;
+		}
+		if (SplitString[0] == Book->ISBN || SplitString[0] == comparisonISBN)
+			newBooks
+			<< Book->ISBN << BookDelimiter
+			<< Book->title << BookDelimiter
+			<< Book->author << BookDelimiter
+			<< Book->genre << BookDelimiter
+			<< Book->language << BookDelimiter
+			<< Book->pageCount << BookDelimiter
+			<< Book->available << BookDelimiter
+			<< Book->borrowed
+			<< endl;
+
+	}
+	newBooks.close();
+	books.close();
+
+	remove("books.txt");
+	rename("temp.txt", fs::current_path() / "books.txt");
+	return;
 }
 
 //----------------------------------------------------------------------------------------------------------
