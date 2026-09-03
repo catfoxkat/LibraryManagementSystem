@@ -132,6 +132,14 @@ void modifyBook(book *Book, bookProperty BookProperty, string Value);
 
 //----------------------------------------------------------------------------------------------------------
 
+void analysis();
+void countBook();
+void countGenre();
+void countLanguage();
+void countUser();
+
+//----------------------------------------------------------------------------------------------------------
+
 int listenForInt();
 
 char listenForChar();
@@ -217,13 +225,6 @@ int main() {
 		case 1:
 			cout << "entering login function";
 			loginFunction();
-			if (currentUser.exists) {
-				cout << "yay im in!" << endl;
-			}
-			else {
-				cout << "im not in :(" << endl;
-			}
-			cin.ignore();
 			break;
 		case 2:
 			cout << "entering register function";
@@ -287,6 +288,7 @@ void LoggedIn() {
 		case 5:
 			if (currentUser.permissionLevel == 1) {
 				cout << "Analysis";
+				analysis();
 			}
 			break;
 		}
@@ -511,7 +513,7 @@ void bookInterface() {
 		case 3:
 			if (currentUser.permissionLevel != 1) { break; }
 			removeBook();
-			cout << "Removed";
+			cout << "Removed" << "Press Enter to return..." << endl;
 			cin.ignore();
 			break;
 		case 0:
@@ -699,7 +701,7 @@ void searchBookProperty() {
 	getBooksBy(BookProperty, listenForString());
 	system("CLS");
 	if (BooksIndexed == 0) {
-		cout << "No entries found." << endl << "Press enter to exit.";
+		cout << "No entries found." << endl << "Press enter to return.";
 		cin.ignore();
 		return;
 	}
@@ -803,11 +805,13 @@ void facilityBookingInterface() {
 		switch (listenForInt()) {
 		case 1: {
 			createBooking();
+			cout << "Press Enter to return...";
 			cin.ignore();
 			break;
 		}
 		case 2:
 			viewBooking();
+			cout << "Press Enter to return...";
 			cin.ignore();
 			break;
 		case 0:
@@ -1132,6 +1136,7 @@ void addBook() {
 	
 
 	cout << "Book added successfully." << endl;
+	cout << "Press Enter to return...";
 	cin.ignore();
 };
 
@@ -1524,6 +1529,191 @@ void modifyBook(book *Book, bookProperty BookProperty, string Value) {
 	remove("books.txt");
 	rename("temp.txt", fs::current_path() / "books.txt");
 	return;
+}
+
+//----------------------------------------------------------------------------------------------------------
+
+void analysis() {
+	bool exit = false;
+
+	while (!exit) {
+		system("CLS");
+
+		cout << "====== ANALYSIS ======" << endl;
+		cout << endl;
+		cout << "[1] Total number of books" << endl;
+		cout << "[2] Number of books by genre" << endl;
+		cout << "[3] Number of books by language" << endl;
+		cout << "[4] Number of users" << endl;
+		cout << "[0] Exit" << endl;
+
+		switch (listenForInt()) {
+		case 1:
+			countBook();
+			break;
+
+		case 2:
+			countGenre();
+			break;
+
+		case 3:
+			countLanguage();
+			break;
+		case 4:
+			countUser();
+			break;
+		case 0:
+			exit = true;
+			break;
+		}
+	}
+}
+
+void countBook() {
+	system("CLS");
+
+	ifstream books(BOOKS_PATH);
+
+	string line;
+	int count = 0;
+
+	while (getline(books, line)) {
+		count++;
+	}
+
+	books.close();
+
+	cout << "======= TOTAL NUMBER OF BOOKS =======" << endl;
+	cout << endl;
+	cout << "Total number of books: " << count << endl;
+
+	cout << endl;
+	cout << "Press Enter to return...";
+	cin.ignore();
+}
+
+void countGenre() {
+	system("CLS");
+
+	ifstream books(BOOKS_PATH);
+
+	string line;
+	string genre;
+	int count = 0;
+
+	string genres[MAX_BOOKS];
+	int genreCount[MAX_BOOKS] = {};
+	int genreIndex = 0;
+
+	while (getline(books, line)) {
+		splitByDelimiter(line, BookDelimiter);
+
+		genre = SplitString[2];
+
+		bool found = false;
+
+		for (int i = 0; i < genreIndex; i++) {
+			if (genres[i] == genre) {
+				genreCount[i]++;
+				found = true;
+				break;
+			}
+		}
+
+		if (!found) {
+			genres[genreIndex] = genre;
+			genreCount[genreIndex] = 1;
+			genreIndex++;
+		}
+	}
+
+	books.close();
+
+	cout << "======= NUMBER OF BOOKS BY GENRE =======" << endl;
+	cout << endl;
+
+	for (int i = 0; i < genreIndex; i++) {
+		cout << genres[i] << ": " << genreCount[i] << endl;
+	}
+
+	cout << endl;
+	cout << "Press Enter to return...";
+	cin.ignore();
+}
+
+void countLanguage() {
+	system("CLS");
+
+	ifstream books(BOOKS_PATH);
+
+	string line;
+	string language;
+
+	string languages[MAX_BOOKS];
+	int languageCount[MAX_BOOKS] = {};
+	int languageIndex = 0;
+
+	while (getline(books, line)) {
+		splitByDelimiter(line, BookDelimiter);
+
+		language = SplitString[4];
+
+		bool found = false;
+
+		for (int i = 0; i < languageIndex; i++) {
+			if (languages[i] == language) {
+				languageCount[i]++;
+				found = true;
+				break;
+			}
+		}
+
+		if (!found) {
+			languages[languageIndex] = language;
+			languageCount[languageIndex] = 1;
+			languageIndex++;
+		}
+	}
+
+	books.close();
+
+	cout << "========== NUMBER OF BOOKS BY LANGUAGE ==========" << endl;
+	cout << endl;
+
+	for (int i = 0; i < languageIndex; i++) {
+		cout << languages[i] << ": " << languageCount[i] << endl;
+	}
+
+	cout << endl;
+	cout << "Press Enter to return...";
+	cin.ignore();
+}
+
+void countUser() {
+	system("CLS");
+
+	ifstream accounts(ACCOUNTS_PATH);
+
+	string line;
+	int count = 0;
+
+	while (getline(accounts, line)) {
+		splitByDelimiter(line, Delimiter);
+
+		if (SplitString[2] == "0") {
+			count++;
+		}
+	}
+
+	accounts.close();
+
+	cout << "========== NUMBER OF USERS ==========" << endl;
+	cout << endl;
+	cout << "Total number of users: " << count << endl;
+
+	cout << endl;
+	cout << "Press Enter to return...";
+	cin.ignore();
 }
 
 //----------------------------------------------------------------------------------------------------------
