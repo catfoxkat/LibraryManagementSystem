@@ -72,13 +72,19 @@ void viewSelectBook(book currentSelectedBook);
 
 //----------------------------------------------------------------------------------------------------------
 
+const int currentDay = stoi(format("{:%d}", chrono::system_clock::now()));
+const int currentMonth = stoi(format("{:%m}", chrono::system_clock::now()));
 const int currentYear = stoi(format("{:%Y}", chrono::system_clock::now()));
+const string Months[12] = { "Janaury", "Febuary", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" }; //used in file structure
+
 const string facilityTypes[3] = { "Discussion room", "Study room", "Computer lab" };
 const int facilityTypesMaxPax[3] = { 6, 2, 10 }; // max occupancy per room
 const int facilityTypeRoomAmount[3] = { 30, 60, 1 }; // how many rooms are there in total, computer lab has only 1 room to test overlapping times
 const int maximumBookingDuration = 3; // how long each booking can last
 const int bookingHourStart = 8; // earliest a booking can start
 const int bookingHourEnd = 20; // latest a booking can end at
+
+int loadedFacilityScheduleFile[91][13];
 
 struct date {
 	int day;
@@ -92,9 +98,19 @@ bool stringToDate(string str, date* Date);
 
 void facilityBookingInterface();
 
+void createBooking();
+
+void viewBooking();
+
 //----------------------------------------------------------------------------------------------------------
 
 void initializeFiles();
+
+void initializeBookingFileStructure();
+
+void loadORinitializeDateFile(date Date);
+
+void addBooking(date Date, int skipOffset, int startTime, int endTime);
 
 void appendNewAccount(string username, string password);
 
@@ -170,6 +186,7 @@ const int SPLIT_BY_MAX = 16;
 const fs::path CURRENT_DIRECTORY = fs::current_path();
 const fs::path ACCOUNTS_PATH = CURRENT_DIRECTORY / "accounts.txt";
 const fs::path BOOKS_PATH = CURRENT_DIRECTORY / "books.txt";
+const fs::path BOOKINGS_PATH = CURRENT_DIRECTORY / "bookings";
 
 const string Delimiter = ", ";
 const string BookDelimiter = "|";
@@ -183,7 +200,9 @@ int BooksIndexed = 0;
 string SplitString[SPLIT_BY_MAX];
 
 int main() {
+	cout << "DATE: " << currentDay << "/" << currentMonth << "/" << currentYear << endl << endl;
 	initializeFiles();
+	initializeBookingFileStructure();
 	initMenu_Main();
 	initFacilityBookingMenu();
 	//initFacilityBookingMenuViewBooking();
@@ -191,7 +210,7 @@ int main() {
 	cin.ignore();
 	
 	bool exitProgram = false;
-
+	// FIX BUFFER KEEPING WRITTEN TEXT AND MOVING IT TO LOGIN
 	while (!exitProgram) {
 		DisplayPage(&Menu_Main);
 		switch (listenForInt()) {
@@ -588,6 +607,7 @@ void displayBookMenuInterface() {
 
 	long long int selectionIndex = -1;
 	book currentSelectedBook;
+	bool selectedBook = false;
 	bool sort = false;
 	bookProperty sortProperty = ISBN;
 
@@ -595,7 +615,6 @@ void displayBookMenuInterface() {
 		while (!actionMade) {
 			switch (listenForChar()) {
 			case 's':
-				cout << "Sort";
 				selectionIndex = -1; //just deselect the selected book unless you want the selection to follow where the book was sorted to
 				currentSelectedBook = book();
 				sort = true;
@@ -616,8 +635,16 @@ void displayBookMenuInterface() {
 				actionMade = true;
 				break;
 			case 'v':
-				cout << "View selected" << endl;
+				if (selectionIndex <= 0 || selectionIndex > BooksIndexed) break;
 				viewSelectBook(currentSelectedBook);
+				getAllBooks();
+				if (selectionIndex > BooksIndexed) {
+					selectionIndex = -2;
+					currentSelectedBook = book();
+				}
+				else {
+					currentSelectedBook = BookArray[selectionIndex - 1];
+				}
 				actionMade = true;
 				break;
 			case '0':
@@ -638,10 +665,8 @@ void displayBookMenuInterface() {
 		if (selectionIndex == -2) {
 			cout << "INDEX OUT OF RANGE" << endl;
 		}
-
-		if (selectionIndex != -1) selectionIndex = -1; 
-		sort = false;
-		sortProperty = ISBN;
+		//sort = false;
+		//sortProperty = ISBN;
 		actionMade = false;
 	}
 }
@@ -749,15 +774,20 @@ bool stringToDate(string str, date* Date) { // DD/MM/YYYY // DOES NOT ACCOUNT FO
 	}
 
 	try {
-		Date->month = stoi(SplitString[1]);
-		if (!valueInRange(Date->month, 1, 12))
-			return false;
 		Date->day = stoi(SplitString[0]);
+		Date->month = stoi(SplitString[1]);
+		Date->year = stoi(SplitString[2]);
+		if (Date->day < 1 || Date->month < 1)
+			return false;
+		
 		if (!valueInRange(Date->day, 1, getMonthMaxDate(Date->month)))
 			return false;
-		Date->year = stoi(SplitString[2]);
-		if (Date->year != currentYear) //must be same as current year
+		
+		if (!valueInRange(Date->month, 1, 12))
 			return false;
+
+		//if (Date->year != currentYear) //must be same as current year
+		//	return false;
 	}
 	catch (...) {
 		return false;
@@ -772,63 +802,13 @@ void facilityBookingInterface() {
 	while (!exit) {
 		switch (listenForInt()) {
 		case 1: {
-			system("CLS");
-
-			cout << "Please select a facility type" << endl
-				<< "[1] Discussion room" << endl //6
-				<< "[2] Study room" << endl //2
-				<< "[3] Computer lab" << endl; //10
-
-			int chosenType = 0;
-			do {
-				chosenType = listenForInt();
-				if (!(chosenType >= 1 && chosenType <= 3))
-					chosenType = 0;
-
-			} while (chosenType == 0);
-
-			system("CLS");
-			cout << "-> Selected facility type \t: " << facilityTypes[chosenType - 1] << endl << endl;
-
-			int bookingPersonsAmount = 0;
-
-			do {
-				cout << "Number of persons (max: " << facilityTypesMaxPax[chosenType - 1] << "): ";
-				bookingPersonsAmount = getNumber();
-				if (bookingPersonsAmount == -1) {
-					cout << "INVALID NUMBER, number of persons cannot be zero, contain, negative, decimal or non numeric values." << endl;
-					bookingPersonsAmount = 0;
-					continue;
-				}
-				if (!valueInRange(bookingPersonsAmount, 1, facilityTypesMaxPax[chosenType - 1])) {
-					cout << "INVALID NUMBER, number of persons must be at least 1 but no more than set maximum." << endl;
-					bookingPersonsAmount = 0;
-					continue;
-				}
-			} while (bookingPersonsAmount == 0);
-
-			system("CLS");
-			cout << "-> Selected facility type \t: " << facilityTypes[chosenType - 1] << endl;
-			cout << "-> Number of persons \t\t: " << bookingPersonsAmount << endl << endl;
-
-			date Date;
-			bool validDate = false;
-			do {
-				cout << "Input Date of booking (DD/MM/YYYY): ";
-				validDate = stringToDate(listenForString(), &Date);
-				if (!validDate)
-					cout << "Invalid date or format." << endl;
-			} while (!validDate);
-
-			system("CLS");
-			cout << "-> Selected facility type \t: " << facilityTypes[chosenType - 1] << endl;
-			cout << "-> Number of persons \t\t: " << bookingPersonsAmount << endl;
-			cout << "-> Selected date \t\t: " << Date.day << "/" << Date.month << "/" << Date.year << endl << endl;
-			cout << "Meow!";
+			createBooking();
 			cin.ignore();
 			break;
 		}
 		case 2:
+			viewBooking();
+			cin.ignore();
 			break;
 		case 0:
 			exit = true;
@@ -836,11 +816,231 @@ void facilityBookingInterface() {
 		}
 
 		if (!exit) {
+			system("CLS");
 			DisplayPage(&facilityBookingMenu, false);
 		}
 	}
 }
 
+void createBooking() {
+	system("CLS");
+
+	cout << "Please select a facility type" << endl
+		<< "[1] Discussion room" << endl //6
+		<< "[2] Study room" << endl //2
+		<< "[3] Computer lab" << endl; //10
+
+	int chosenType = 0;
+	do {
+		chosenType = listenForInt();
+		if (!(chosenType >= 1 && chosenType <= 3))
+			chosenType = 0;
+
+	} while (chosenType == 0);
+
+	system("CLS");
+	cout << "-> Selected facility type \t: " << facilityTypes[chosenType - 1] << endl << endl;
+
+	int bookingPersonsAmount = 0;
+
+	do {
+		cout << "Number of persons (max: " << facilityTypesMaxPax[chosenType - 1] << "): ";
+		bookingPersonsAmount = getNumber();
+		if (bookingPersonsAmount == -1) {
+			cout << "INVALID NUMBER, number of persons cannot be zero, contain, negative, decimal or non numeric values." << endl;
+			bookingPersonsAmount = 0;
+			continue;
+		}
+		if (!valueInRange(bookingPersonsAmount, 1, facilityTypesMaxPax[chosenType - 1])) {
+			cout << "INVALID NUMBER, number of persons must be at least 1 but no more than set maximum." << endl;
+			bookingPersonsAmount = 0;
+			continue;
+		}
+	} while (bookingPersonsAmount == 0);
+
+	system("CLS");
+	cout << "-> Selected facility type \t: " << facilityTypes[chosenType - 1] << endl;
+	cout << "-> Number of persons \t\t: " << bookingPersonsAmount << endl << endl;
+	date Date;
+	bool validDate = false;
+	do {
+		cout << "Input Date of booking (DD/MM/YYYY): ";
+		validDate = stringToDate(listenForString(), &Date);
+		cout << validDate << endl;
+		if (currentDay != 31 && currentMonth != 12 && Date.year != currentYear) {
+			validDate = false;
+			cout << "Booking date must be current year" << endl;
+		}
+
+		if (
+			(((getMonthMaxDate(Date.month) - Date.day + currentDay > 5) && abs(Date.month - currentMonth) == 1))
+			||
+			((abs(currentDay - Date.day) > 5)  && (Date.month == currentMonth))
+			||
+			(abs(Date.month - currentMonth) > 1 && !(currentMonth == 12 && Date.month == 1 && currentYear < Date.year))
+			||
+			(Date.month < currentMonth && currentYear == Date.year)
+			||
+			(Date.day < currentDay && Date.month == currentMonth && currentYear == Date.year)
+			) {
+			validDate = false;
+			cout << "Booking date must be in the future and not more than 5 days in advance." << endl;
+		}
+		
+		if (!validDate)
+			cout << "Invalid date or format." << endl;
+	} while (!validDate);
+	loadORinitializeDateFile(Date);
+
+
+	int skipOffset;
+	int endRoomIndex;
+
+	switch (chosenType) {
+	case 1:
+		skipOffset = 0;
+		endRoomIndex = facilityTypeRoomAmount[0];
+		break;
+	case 2:
+		skipOffset = facilityTypeRoomAmount[0];
+		endRoomIndex = facilityTypeRoomAmount[0] + facilityTypeRoomAmount[1];
+		break;
+	case 3:
+		skipOffset = facilityTypeRoomAmount[0] + facilityTypeRoomAmount[1];
+		endRoomIndex = facilityTypeRoomAmount[0] + facilityTypeRoomAmount[1] + facilityTypeRoomAmount[2];
+		break;
+	}
+
+	bool finishTimeSelection = false;
+
+	while (!finishTimeSelection) {
+		int roomSelection = 0;
+		while (roomSelection == 0) {
+			system("CLS");
+			cout << "-> Selected facility type \t: " << facilityTypes[chosenType - 1] << endl;
+			cout << "-> Number of persons \t\t: " << bookingPersonsAmount << endl;
+			cout << "-> Selected date \t\t: " << Date.day << "/" << Date.month << "/" << Date.year << endl << endl;
+			cout << "[ROOM] [HOUR ";
+			for (int i = 0; i < bookingHourEnd - bookingHourStart + 1; i++) {
+				cout << setw(3) << to_string(i + bookingHourStart);
+			}
+			cout << "]" << endl;
+
+			int index = 1;
+			for (int i = skipOffset; i < endRoomIndex; i++) {
+				cout << " " << setw(4) << left << to_string(index++) << " " << "|" << setw(6) << " ";
+				for (int k = 0; k < bookingHourEnd - bookingHourStart + 1; k++) {
+					if (loadedFacilityScheduleFile[i][k]) {
+						cout << setw(3) << right << "x";
+					}
+					else cout << setw(3) << right << "-";
+				}
+				cout << endl;
+			}
+			cout << endl << "Select a room: ";
+			int thisRoomSelection = getNumber();
+			if (thisRoomSelection > 0 && thisRoomSelection <= facilityTypeRoomAmount[chosenType])
+				roomSelection = thisRoomSelection;
+		}
+		int startTime, endTime;
+
+		cout << "Input start time of booking: ";
+		startTime = getNumber();
+		cout << "Input end time of booking: ";
+		endTime = getNumber();
+
+		if (endTime - startTime> maximumBookingDuration - 1) {
+			cout << "Booking duration exceeds maximum hours (" << maximumBookingDuration << ")" << endl;
+			cin.ignore();
+			continue;
+		}
+
+		bool timeCollision = false;
+		for (int k = startTime - bookingHourStart; k < endTime - bookingHourStart; k++) {
+			if (loadedFacilityScheduleFile[roomSelection - 1][k])
+				timeCollision = true;
+		}
+
+		if (timeCollision) {
+			cout << "Given booking time collides with other bookings!";
+			cin.ignore();
+			continue;
+		}
+
+		addBooking(Date, skipOffset + roomSelection - 1, startTime - bookingHourStart, endTime - bookingHourStart);
+		finishTimeSelection = true;
+	}
+}
+
+void viewBooking() {
+	system("CLS");
+
+	cout << "Please select a facility type" << endl
+		<< "[1] Discussion room" << endl //6
+		<< "[2] Study room" << endl //2
+		<< "[3] Computer lab" << endl; //10
+
+	int chosenType = 0;
+	do {
+		chosenType = listenForInt();
+		if (!(chosenType >= 1 && chosenType <= 3))
+			chosenType = 0;
+
+	} while (chosenType == 0);
+
+	system("CLS");
+	cout << "-> Selected facility type \t: " << facilityTypes[chosenType - 1] << endl << endl;
+
+	date Date;
+	bool validDate = false;
+	do {
+		cout << "Input Date of booking (DD/MM/YYYY): ";
+		validDate = stringToDate(listenForString(), &Date);
+		
+		if (!validDate)
+			cout << "Invalid date or format." << endl;
+	} while (!validDate);
+	loadORinitializeDateFile(Date);
+
+
+	int skipOffset;
+	int endRoomIndex;
+
+	switch (chosenType) {
+	case 1:
+		skipOffset = 0;
+		endRoomIndex = facilityTypeRoomAmount[0];
+		break;
+	case 2:
+		skipOffset = facilityTypeRoomAmount[0];
+		endRoomIndex = facilityTypeRoomAmount[0] + facilityTypeRoomAmount[1];
+		break;
+	case 3:
+		skipOffset = facilityTypeRoomAmount[0] + facilityTypeRoomAmount[1];
+		endRoomIndex = facilityTypeRoomAmount[0] + facilityTypeRoomAmount[1] + facilityTypeRoomAmount[2];
+		break;
+	}
+	system("CLS");
+	cout << "-> Selected facility type \t: " << facilityTypes[chosenType - 1] << endl;
+	cout << "-> Selected date \t\t: " << Date.day << "/" << Date.month << "/" << Date.year << endl << endl;
+	cout << "[ROOM] [HOUR ";
+	for (int i = 0; i < bookingHourEnd - bookingHourStart + 1; i++) {
+		cout << setw(3) << to_string(i + bookingHourStart);
+	}
+	cout << "]" << endl;
+
+	int index = 1;
+	for (int i = skipOffset; i < endRoomIndex; i++) {
+		cout << " " << setw(4) << left << to_string(index++) << " " << "|" << setw(6) << " ";
+		for (int k = 0; k < bookingHourEnd - bookingHourStart + 1; k++) {
+			if (loadedFacilityScheduleFile[i][k]) {
+				cout << setw(3) << right << "x";
+			}
+			else cout << setw(3) << right << "-";
+		}
+		cout << endl;
+	}
+}
 //----------------------------------------------------------------------------------------------------------
 
 static bool hasOnlyInt(string str) {
@@ -988,11 +1188,13 @@ void editBook(book *Book) {
 
 //----------------------------------------------------------------------------------------------------------
 void initializeFiles() {
-	cout << "FILEHANDLER" << endl;
+	cout << "=== FILEHANDLER ===" << endl;
 	cout << "CURRENT DIRECTORY: \t" << CURRENT_DIRECTORY << endl;
 	cout << "ACCOUNTS FILEPATH: \t" << ACCOUNTS_PATH << endl;
 	cout << "BOOKS FILEPATH: \t" << BOOKS_PATH << endl;
-	cout << "Initialize Accounts file\n";
+	cout << "BOOKINGS PATH: \t\t" << BOOKINGS_PATH << endl;
+
+	cout << "\nInitialize Accounts file\n";
 
 	if (fs::exists(ACCOUNTS_PATH))
 		cout << "\t- accounts.txt already exists.\n";
@@ -1002,7 +1204,7 @@ void initializeFiles() {
 		accounts.close();
 	}
 
-	cout << "Initialize Books file\n";
+	cout << "\nInitialize Books file\n";
 
 	if (fs::exists(BOOKS_PATH))
 		cout << "\t- books.txt already exists.\n";
@@ -1011,6 +1213,106 @@ void initializeFiles() {
 		ofstream books("books.txt");
 		books.close();
 	}
+}
+
+void initializeBookingFileStructure() {
+	cout << "\nInitialize Bookings file structure\n";
+	if (fs::is_directory(BOOKINGS_PATH))
+		cout << "\t- bookings directory already exists.\n";
+	else {
+		cout << "\t- bookings directory does not exist, creating new directory.\n";
+		fs::create_directory(BOOKINGS_PATH);
+	}
+
+	cout << endl << "CURRENT YEAR: " << currentYear << endl;
+
+	if (fs::is_directory(BOOKINGS_PATH / (to_string(currentYear)))) {
+		cout << "\t- current year directory already exists\n";
+		for (int i = 0; i < 12; i++) {
+			if (fs::is_directory(BOOKINGS_PATH / (to_string(currentYear)) / Months[i])) {
+				cout << "\t\t- month " << Months[i] << " directory exists\n";
+			}
+			else {
+				cout << "\t\t- month " << Months[i] << " directory does not exist, creating new directory\n";
+				fs::create_directory(BOOKINGS_PATH / (to_string(currentYear)) / Months[i]);
+			}
+		}
+	}
+	else {
+		cout << "\t- current year directory does not exist, creating new directory\n";
+		fs::create_directory(BOOKINGS_PATH / (to_string(currentYear)));
+		cout << "\t- filling month directories\n";
+		for (int i = 0; i < 12; i++) {
+			fs::create_directory(BOOKINGS_PATH / (to_string(currentYear)) / Months[i]);
+			cout << "\t\t- month " << Months[i] << " directory created\n";
+		}
+	}
+}
+
+void loadORinitializeDateFile(date Date) {
+	string FileName = to_string(Date.day) + ".txt";
+	fs::path FilePath = BOOKINGS_PATH / (to_string(currentYear)) / Months[Date.month - 1] / FileName;
+	if (!fs::exists(FilePath)) {
+		ofstream dateFile(FilePath);
+		for (int i = 0; i < facilityTypeRoomAmount[0] + facilityTypeRoomAmount[1] + facilityTypeRoomAmount[2]; i++) {
+			string line;
+			for (int k = 0; k < bookingHourEnd - bookingHourStart + 1; k++) {
+				line.append("0");
+			}
+			dateFile << line << endl;
+		}
+		dateFile.close();
+	}
+	ifstream dateFile(FilePath);
+	string line;
+	int index = 0;
+	while (getline(dateFile, line)) {
+		for (int i = 0; i < bookingHourEnd - bookingHourStart + 1; i++) {
+			loadedFacilityScheduleFile[index][i] = ((int)line[i] - 48);
+		}
+		index++;
+	}
+	dateFile.close();
+}
+
+void addBooking(date Date, int skipOffset, int startTime, int endTime) {
+	cout << "Booking time range" << startTime << " - " << endTime << endl;
+	string FileName = to_string(Date.day) + ".txt";
+	fs::path FilePath = BOOKINGS_PATH / (to_string(currentYear)) / Months[Date.month - 1] / FileName;
+	ofstream newBooking;
+	newBooking.open("temp.txt");
+
+	if (!fs::exists(FilePath)) {
+		ofstream dateFile(FilePath);
+		for (int i = 0; i < facilityTypeRoomAmount[0] + facilityTypeRoomAmount[1] + facilityTypeRoomAmount[2]; i++) {
+			string line;
+			for (int k = 0; k < bookingHourEnd - bookingHourStart + 1; k++) {
+				line.append("0");
+			}
+			dateFile << line << endl;
+		}
+		dateFile.close();
+	}
+	ifstream dateFile(FilePath);
+	string line;
+	int index = 0;
+	while (getline(dateFile, line)) {
+		if (index == skipOffset) {
+			cout << line << endl;
+			for (int k = 0; k < line.length(); k++)
+				if (k >= startTime && k <= endTime)
+					line[k] = '1';
+		}
+		newBooking << line << endl;
+		index++;
+	}
+	dateFile.close();
+
+	newBooking.close();
+
+	remove(FilePath);
+	rename("temp.txt", FilePath);
+	return;
 }
 
 void appendNewAccount(string username, string password) {
