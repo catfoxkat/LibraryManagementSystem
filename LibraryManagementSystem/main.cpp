@@ -6,10 +6,10 @@
 #include<fstream>
 #include<conio.h> //for inputListener getch
 #include<cstdlib>
-#include<cstdio>
 #include<utility>
 #include<format>
 #include<chrono> //for getting current year
+#include<limits>
 
 using namespace std;
 
@@ -31,6 +31,20 @@ enum bookProperty { // do not rearrange!! it will break select menus and file ha
 	Available,
 	Borrowed
 };
+
+const int MAX_BOOKS = 512;
+const int SPLIT_BY_MAX = 16;
+const int MAX_FEEDBACK = 512;
+
+const fs::path CURRENT_DIRECTORY = fs::current_path();
+const fs::path ACCOUNTS_PATH = CURRENT_DIRECTORY / "accounts.txt";
+const fs::path BOOKS_PATH = CURRENT_DIRECTORY / "books.txt";
+const fs::path BORROWS_PATH = CURRENT_DIRECTORY / "borrows.txt";
+const fs::path BOOKINGS_PATH = CURRENT_DIRECTORY / "bookings";
+const fs::path FEEDBACK_PATH = CURRENT_DIRECTORY / "feedback.txt";
+
+const string Delimiter = ", ";
+const string BookDelimiter = "|";
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -97,7 +111,7 @@ void editBook(book *Book);
 void bookInterface();
 void bookSearchSubInterface();
 void displayAllBooks(bool sort = false, bookProperty BookProperty = ISBN, int selectionIndex = -1);
-void displayBookMenuInterface();
+void displayBookMenuInterface(bookProperty BookProperty, string Property, bool searched = false);
 void displayHeader();
 void displayBookDetails(int index, book Book, int selectionIndex = -1);
 void searchBookProperty();
@@ -122,11 +136,20 @@ void getBooksBy(bookProperty BookProperty, string Property);
 void getAllBooks();
 bool removeBook(long long int ISBN);
 void modifyBook(book* Book, bookProperty BookProperty, string Value);
+bool checkIfBorrowed(long long int ISBN);
+int countBorrows(long long int ISBN);
+void borrowNewBook(long long int ISBN);
+void returnBook(long long int ISBN);
+void changeBorrowUsername(string oldUsername, string currentUsername);
 
 void appendNewAccount(string username, string password);
 account getAccountByName(string username);
 bool validateAccount(string username, string password);
 bool checkUsername(string username);
+
+void appendNewFeedback(string feedback);
+void getAllFeedback();
+void removeFeedback(int index);
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -135,6 +158,12 @@ void countBook();
 void countGenre();
 void countLanguage();
 void countUser();
+
+string genres[MAX_BOOKS];
+int genreCount[MAX_BOOKS] = {};
+
+string languages[MAX_BOOKS];
+int languageCount[MAX_BOOKS] = {};
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -186,6 +215,7 @@ void initViewSelectedBookMenu(book Book);
 void initFacilityBookingMenu();
 void initManageUsersMenu();
 void initManageUserViewMenu(string accountString);
+void initFeedbackMenu();
 
 menu Menu_Main;
 menu Menu_Main_Logged;
@@ -196,19 +226,18 @@ menu viewSelectedBookMenu;
 menu facilityBookingMenu;
 menu manageUsersMenu;
 menu manageUserViewMenu;
+menu feedbackMenu;
 
 //----------------------------------------------------------------------------------------------------------
 
-const int MAX_BOOKS = 512;
-const int SPLIT_BY_MAX = 16;
+void feedbackInterface();
+void createNewFeedback();
+void viewFeedback();
 
-const fs::path CURRENT_DIRECTORY = fs::current_path();
-const fs::path ACCOUNTS_PATH = CURRENT_DIRECTORY / "accounts.txt";
-const fs::path BOOKS_PATH = CURRENT_DIRECTORY / "books.txt";
-const fs::path BOOKINGS_PATH = CURRENT_DIRECTORY / "bookings";
+string feedbackArray[MAX_FEEDBACK];
+int feedbackIndexed = 0;
 
-const string Delimiter = ", ";
-const string BookDelimiter = "|";
+//----------------------------------------------------------------------------------------------------------
 
 account currentUser;
 bool guest;
@@ -227,7 +256,7 @@ int main() {
 	initManageUsersMenu();
 
 
-	cin.ignore();
+	cin.ignore(numeric_limits<streamsize>::max(), '\n');
 	
 	bool exitProgram = false;
 	// FIX BUFFER KEEPING WRITTEN TEXT AND MOVING IT TO LOGIN
@@ -264,37 +293,38 @@ void LoggedIn() {
 	initBookSearchMenu();
 	initBookMenu();
 	initDisplayBookMenu();
+	initFeedbackMenu();
 
 	bool exitMenu_Main = false;
 
 	while (!exitMenu_Main) {
 		DisplayPage(&Menu_Main_Logged);
 		switch (listenForInt()) {
-			cout << "waiting";
 		case 0:
-			cout << "CLEARING";
+			//cout << "CLEARING";
 			guest = false;
 			currentUser = account();
 			exitMenu_Main = true;
 			break;
 		case 1:
-			cout << "BROWSE";
+			//cout << "BROWSE";
 			bookInterface();
 			break;
 		case 2:
 			if (currentUser.permissionLevel >= 0) {
-				cout << "FACILITY BOOKING";
+				//cout << "FACILITY BOOKING";
 				facilityBookingInterface();
 			}
 			break;
 		case 3:
 			if (currentUser.permissionLevel >= 0) {
-				cout << "FEEDBACK";
+				//cout << "FEEDBACK";
+				feedbackInterface();
 			}
 			break;
 		case 4:
 			if (currentUser.permissionLevel == 1) { 
-				cout << "Manage users";
+				//cout << "Manage users";
 				manageUsers();
 			}
 			else if (currentUser.permissionLevel == 0) {
@@ -303,7 +333,7 @@ void LoggedIn() {
 			break;
 		case 5:
 			if (currentUser.permissionLevel == 1) {
-				cout << "Analysis";
+				//cout << "Analysis";
 				analysis();
 			}
 			break;
@@ -454,7 +484,7 @@ bool stringToDate(string str, date* Date) { // DD/MM/YYYY // DOES NOT ACCOUNT FO
 		Date->year = stoi(SplitString[2]);
 		if (Date->day < 1 || Date->month < 1)
 			return false;
-		
+
 		if (!valueInRange(Date->day, 1, getMonthMaxDate(Date->month)))
 			return false;
 		
@@ -479,13 +509,13 @@ void facilityBookingInterface() {
 		case 1: {
 			createBooking();
 			cout << "Press Enter to return...";
-			cin.ignore();
+			cin.ignore(numeric_limits<streamsize>::max(), '\n');
 			break;
 		}
 		case 2:
 			viewBooking();
 			cout << "Press Enter to return...";
-			cin.ignore();
+			cin.ignore(numeric_limits<streamsize>::max(), '\n');
 			break;
 		case 0:
 			exit = true;
@@ -543,10 +573,15 @@ void createBooking() {
 	do {
 		cout << "Input Date of booking (DD/MM/YYYY): ";
 		validDate = stringToDate(listenForString(), &Date);
-		cout << validDate << endl;
+		if (!validDate) {
+			cout << "Invalid date or format." << endl;
+			continue;
+		}
+
 		if (currentDay != 31 && currentMonth != 12 && Date.year != currentYear) {
 			validDate = false;
 			cout << "Booking date must be current year" << endl;
+			continue;
 		}
 
 		if (
@@ -562,10 +597,8 @@ void createBooking() {
 			) {
 			validDate = false;
 			cout << "Booking date must be in the future and not more than 5 days in advance." << endl;
+			continue;
 		}
-		
-		if (!validDate)
-			cout << "Invalid date or format." << endl;
 	} while (!validDate);
 	loadORinitializeDateFile(Date);
 
@@ -616,7 +649,7 @@ void createBooking() {
 			}
 			cout << endl << "Select a room: ";
 			int thisRoomSelection = getINTNumber();
-			if (thisRoomSelection > 0 && thisRoomSelection <= facilityTypeRoomAmount[chosenType])
+			if (thisRoomSelection > 0 && thisRoomSelection <= facilityTypeRoomAmount[chosenType - 1])
 				roomSelection = thisRoomSelection;
 		}
 		int startTime, endTime;
@@ -628,19 +661,19 @@ void createBooking() {
 
 		if (endTime - startTime> maximumBookingDuration - 1) {
 			cout << "Booking duration exceeds maximum hours (" << maximumBookingDuration << ")" << endl;
-			cin.ignore();
+			cin.ignore(numeric_limits<streamsize>::max(), '\n');
 			continue;
 		}
 
 		bool timeCollision = false;
-		for (int k = startTime - bookingHourStart; k < endTime - bookingHourStart; k++) {
-			if (loadedFacilityScheduleFile[roomSelection - 1][k])
+		for (int k = startTime - bookingHourStart; k < endTime - bookingHourStart + 1; k++) {
+			if (loadedFacilityScheduleFile[roomSelection - 1 + skipOffset][k])
 				timeCollision = true;
 		}
 
 		if (timeCollision) {
 			cout << "Given booking time collides with other bookings!";
-			cin.ignore();
+			cin.ignore(numeric_limits<streamsize>::max(), '\n');
 			continue;
 		}
 
@@ -834,7 +867,7 @@ void addBook() {
 	appendNewBook(newBook);
 	cout << "Book added successfully." << endl;
 	cout << "Press Enter to return...";
-	cin.ignore();
+	cin.ignore(numeric_limits<streamsize>::max(), '\n');
 };
 
 void removeBookFunction() {
@@ -908,7 +941,7 @@ void bookInterface() {
 			if (currentUser.permissionLevel != 1) { break; }
 			removeBookFunction();
 			cout << "Press Enter to return..." << endl;
-			cin.ignore();
+			cin.ignore(numeric_limits<streamsize>::max(), '\n');
 			break;
 		case 0:
 			exit = true;
@@ -925,7 +958,7 @@ void bookSearchSubInterface() {
 		case 1: {
 			getAllBooks();
 			displayAllBooks(false, ISBN);
-			displayBookMenuInterface();
+			displayBookMenuInterface(ISBN, "", false);
 			break;
 		}
 		case 2:
@@ -996,7 +1029,7 @@ void displayAllBooks(bool sort, bookProperty BookProperty, int selectionIndex) {
 	}
 }
 
-void displayBookMenuInterface() {
+void displayBookMenuInterface(bookProperty BookProperty, string Property, bool searched) {
 	DisplayPage(&displayBookMenu, false);
 	bool exit = false;
 	bool actionMade = false;
@@ -1033,7 +1066,11 @@ void displayBookMenuInterface() {
 			case 'v':
 				if (selectionIndex <= 0 || selectionIndex > BooksIndexed) break;
 				viewSelectBook(currentSelectedBook);
-				getAllBooks();
+				if (searched)
+					getBooksBy(BookProperty, Property);
+				else
+					getAllBooks();
+				
 				if (selectionIndex > BooksIndexed) {
 					selectionIndex = -2;
 					currentSelectedBook = book();
@@ -1050,7 +1087,10 @@ void displayBookMenuInterface() {
 		}
 
 		if (!exit) {
-			getAllBooks();
+			if (searched)
+				getBooksBy(BookProperty, Property);
+			else
+				getAllBooks();
 			displayAllBooks(sort, sortProperty, (int)selectionIndex);
 			DisplayPage(&displayBookMenu, false);
 		}
@@ -1092,11 +1132,12 @@ void searchBookProperty() {
 	system("CLS");
 	bookProperty BookProperty = selectBookProperty();
 	cout << "Search by : ";
-	getBooksBy(BookProperty, listenForString());
+	string Property = listenForString();
+	getBooksBy(BookProperty, Property);
 	system("CLS");
 	if (BooksIndexed == 0) {
 		cout << "No entries found." << endl << "Press enter to return.";
-		cin.ignore();
+		cin.ignore(numeric_limits<streamsize>::max(), '\n');
 		return;
 	}
 	else {
@@ -1107,7 +1148,7 @@ void searchBookProperty() {
 			displayBookDetails(i + 1, BookArray[i]);
 		}
 	}
-	displayBookMenuInterface();
+	displayBookMenuInterface(BookProperty, Property, true);
 	return;
 }
 
@@ -1118,16 +1159,29 @@ void viewSelectBook(book currentSelectedBook) {
 		DisplayPage(&viewSelectedBookMenu);
 		switch (listenForInt()) {
 		case 1:
-			if (currentUser.permissionLevel > 1) {
-				cout << "1 BORROW FUNCTION HERE";
+			if (currentUser.permissionLevel >= 0) {
+				if (!checkIfBorrowed(currentSelectedBook.ISBN)) {
+					borrowNewBook(currentSelectedBook.ISBN);
+					cout << "Sucessfully borrowed book.";
+					modifyBook(&currentSelectedBook, Borrowed, to_string(currentSelectedBook.borrowed + 1));
+				}
+				else
+					cout << "You are already borrowing this book." << endl;
+				cin.ignore(numeric_limits<streamsize>::max(), '\n');
 			}
 			break;
 		case 2:
+			if (checkIfBorrowed(currentSelectedBook.ISBN)) {
+				returnBook(currentSelectedBook.ISBN);
+				modifyBook(&currentSelectedBook, Borrowed, to_string(currentSelectedBook.borrowed - 1));
+			}
+			break;
+		case 3:
 			if (currentUser.permissionLevel == 1) {
 				editBook(&currentSelectedBook);
 			}
 			break;
-		case 3:
+		case 4:
 			if (currentUser.permissionLevel == 1) {
 				removeBook(currentSelectedBook.ISBN);
 				exit = true;
@@ -1243,6 +1297,26 @@ void initializeFiles() {
 		cout << "\t- books.txt does not exist, creating new file.\n";
 		ofstream books("books.txt");
 		books.close();
+	}
+
+	cout << "\nInitialize Borrows file\n";
+
+	if (fs::exists(BORROWS_PATH))
+		cout << "\t- borrows.txt already exists.\n";
+	else {
+		cout << "\t- borrows.txt does not exist, creating new file.\n";
+		ofstream borrows("borrows.txt");
+		borrows.close();
+	}
+
+	cout << "\nInitialze Feedback file\n";
+
+	if (fs::exists(FEEDBACK_PATH))
+		cout << "\t- feedback.txt already exists.\n";
+	else {
+		cout << "\t- feedback.txt does not exist, creating new file.\n";
+		ofstream feedbackFile(FEEDBACK_PATH);
+		feedbackFile.close();
 	}
 }
 
@@ -1360,8 +1434,7 @@ void addBooking(date Date, int skipOffset, int startTime, int endTime) {
 	return;
 }
 
-void appendNewBook(book newBook)
-{
+void appendNewBook(book newBook) {
 	ofstream booksFile;
 
 	booksFile.open(BOOKS_PATH, ios_base::app);
@@ -1426,7 +1499,6 @@ void getAllBooks() {
 		i++;
 	}
 	BooksIndexed = i;
-	books.close();
 	return;
 }
 
@@ -1447,8 +1519,8 @@ bool removeBook(long long int ISBN) { //remove line with the matched ISBN
 	newBooks.close();
 	books.close();
 
-	remove("books.txt");
-	rename("temp.txt", fs::current_path() / "books.txt");
+	remove(BOOKS_PATH);
+	rename("temp.txt", BOOKS_PATH);
 	return removed;
 }
 
@@ -1510,9 +1582,79 @@ void modifyBook(book* Book, bookProperty BookProperty, string Value) {
 	newBooks.close();
 	books.close();
 
-	remove("books.txt");
-	rename("temp.txt", fs::current_path() / "books.txt");
+	remove(BOOKS_PATH);
+	rename("temp.txt", BOOKS_PATH);
 }
+
+bool checkIfBorrowed(long long int ISBN) {
+	ifstream borrows(BORROWS_PATH, ios_base::in);
+	string line;
+	while (getline(borrows, line)) {
+		splitByDelimiter(line, BookDelimiter);
+		if (SplitString[0] == to_string(ISBN) && SplitString[1] == currentUser.username)
+			return true;
+	}
+
+	borrows.close();
+	return false;
+}
+
+int countBorrows(long long int ISBN) {
+	ifstream borrows(BORROWS_PATH, ios_base::in);
+	string line; 
+	int amount = 0;
+	while (getline(borrows, line)) {
+		splitByDelimiter(line, BookDelimiter);
+		if (SplitString[0] == to_string(ISBN))
+			amount++;
+	}
+
+	borrows.close();
+	return amount;
+}
+
+void borrowNewBook(long long int ISBN) {
+	ofstream borrows(BORROWS_PATH, ios_base::app);
+	borrows << ISBN << BookDelimiter << currentUser.username << endl;
+	borrows.close();
+}
+
+void returnBook(long long int ISBN) {
+	ifstream borrows(BORROWS_PATH, ios_base::in);
+	ofstream newBorrows("temp.txt");
+
+	string line;
+	while (getline(borrows, line)) {
+		splitByDelimiter(line, BookDelimiter);
+		if (SplitString[0] != to_string(ISBN) && SplitString[1] != currentUser.username)
+			newBorrows << line << endl;
+	}
+
+	borrows.close();
+	newBorrows.close();
+	remove(BORROWS_PATH);
+	rename("temp.txt", BORROWS_PATH);
+}
+
+void changeBorrowUsername(string oldUsername, string currentUsername) {
+	ifstream borrows(BORROWS_PATH, ios_base::in);
+	ofstream newBorrows("temp.txt");
+
+	string line;
+	while (getline(borrows, line)) {
+		splitByDelimiter(line, BookDelimiter);
+		if (SplitString[1] == oldUsername)
+			newBorrows << SplitString[0] << BookDelimiter << currentUsername << endl;
+		else
+			newBorrows << line << endl;
+	}
+
+	borrows.close();
+	newBorrows.close();
+	remove(BORROWS_PATH);
+	rename("temp.txt", BORROWS_PATH);
+}
+
 
 void appendNewAccount(string username, string password) {
 	ofstream accounts; accounts.open(ACCOUNTS_PATH, ios_base::app);
@@ -1526,7 +1668,6 @@ account getAccountByName(string username) { //name pass role
 	while (getline(accounts, line)) {
 		int splits = splitByDelimiter(line, Delimiter);
 		if (splits < 3) {
-			cout << "Invalid account format, skipping..." << endl << endl;
 			continue;
 		}
 		if (SplitString[0] == username) {
@@ -1573,6 +1714,44 @@ bool checkUsername(string username) {
 	}
 
 	return false;
+}
+
+void appendNewFeedback(string feedback) {
+	ofstream feedbackFile(FEEDBACK_PATH, ios_base::app);
+	feedbackFile << currentUser.username << BookDelimiter << feedback << endl;
+	feedbackFile.close();
+}
+
+void getAllFeedback() {
+	ifstream feedbackFile(FEEDBACK_PATH, ios::in);
+	int i = 0;
+	string line;
+	while (getline(feedbackFile, line)) {
+		feedbackArray[i] = line;
+		i++;
+	}
+	feedbackIndexed = i;
+	feedbackFile.close();
+}
+
+void removeFeedback(int index) {
+	ifstream feedbackFile(FEEDBACK_PATH, ios::in);
+	ofstream temp("temp.txt");
+	int i = 0;
+	string line;
+	while (getline(feedbackFile, line)) {
+		if (i == index) {
+			i++;
+			continue;
+		}
+		temp << line << endl;
+		i++;
+	}
+	feedbackFile.close();
+	temp.close();
+
+	remove(FEEDBACK_PATH);
+	rename("temp.txt", FEEDBACK_PATH);
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -1633,10 +1812,10 @@ void countBook() {
 
 	cout << endl;
 	cout << "Press Enter to return...";
-	cin.ignore();
+	cin.ignore(numeric_limits<streamsize>::max(), '\n');
 }
 
-void countGenre() {
+void countGenre() { //should separate into more functions as it takes too much memory here
 	system("CLS");
 
 	ifstream books(BOOKS_PATH);
@@ -1645,8 +1824,6 @@ void countGenre() {
 	string genre;
 	int count = 0;
 
-	string genres[MAX_BOOKS];
-	int genreCount[MAX_BOOKS] = {};
 	int genreIndex = 0;
 
 	while (getline(books, line)) {
@@ -1682,7 +1859,7 @@ void countGenre() {
 
 	cout << endl;
 	cout << "Press Enter to return...";
-	cin.ignore();
+	cin.ignore(numeric_limits<streamsize>::max(), '\n');
 }
 
 void countLanguage() {
@@ -1693,8 +1870,6 @@ void countLanguage() {
 	string line;
 	string language;
 
-	string languages[MAX_BOOKS];
-	int languageCount[MAX_BOOKS] = {};
 	int languageIndex = 0;
 
 	while (getline(books, line)) {
@@ -1730,7 +1905,7 @@ void countLanguage() {
 
 	cout << endl;
 	cout << "Press Enter to return...";
-	cin.ignore();
+	cin.ignore(numeric_limits<streamsize>::max(), '\n');
 }
 
 void countUser() {
@@ -1757,7 +1932,7 @@ void countUser() {
 
 	cout << endl;
 	cout << "Press Enter to return...";
-	cin.ignore();
+	cin.ignore(numeric_limits<streamsize>::max(), '\n');
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -1841,10 +2016,13 @@ void selectViewAccount(string username) {
 		}
 
 		switch (listenForInt()) {
-		case 1:
-			modifyAccountsFile(username, _username, getValidUsername(), false);
+		case 1:	{
+			string newUsername = getValidUsername();
+			changeBorrowUsername(currentUser.username, newUsername);
+			modifyAccountsFile(username, _username, newUsername, false);
 			actionMade = true;
 			break;
+		}
 		case 2:
 			modifyAccountsFile(username, _password, getValidPassword(), false);
 			actionMade = true;
@@ -1902,8 +2080,8 @@ void modifyAccountsFile(string username, userProperties Property, string newProp
 	newAccounts.close();
 	accounts.close();
 
-	remove("accounts.txt");
-	rename("temp.txt", fs::current_path() / "accounts.txt");
+	remove(ACCOUNTS_PATH);
+	rename("temp.txt", ACCOUNTS_PATH);
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -2114,6 +2292,9 @@ void initViewSelectedBookMenu(book Book) {
 	if (currentUser.permissionLevel >= 0) {
 		AppendNav(&viewSelectedBookMenu, "Borrow book");
 	}
+	if (checkIfBorrowed(Book.ISBN)) {
+		AppendNav(&viewSelectedBookMenu, "Return book");
+	}
 	if (currentUser.permissionLevel == 1) {
 		AppendNav(&viewSelectedBookMenu, "Edit book details");
 		AppendNav(&viewSelectedBookMenu, "Delete book");
@@ -2148,4 +2329,83 @@ void initManageUserViewMenu(string accountString) {
 	AppendNav(&manageUserViewMenu, "Exit", 0);
 }
 
+void initFeedbackMenu() {
+	feedbackMenu = menu();
+	SetTitle(&feedbackMenu, "Feedback menu");
+	AppendNav(&feedbackMenu, "Send feedback");
+	if (currentUser.permissionLevel == 1)
+		AppendNav(&feedbackMenu, "View feedback");
+	AppendNav(&feedbackMenu, "Exit", 0);
+}
+
 //----------------------------------------------------------------------------------------------------------
+
+void feedbackInterface() {
+	bool exit = false;
+	while (!exit) {
+		DisplayPage(&feedbackMenu);
+
+		switch (listenForInt()) {
+		case 1:
+			createNewFeedback();
+			break;
+		case 2:
+			if (currentUser.permissionLevel == 1)
+				viewFeedback();
+			break;
+		case 0:
+			exit = true;
+			break;
+		}
+	}
+}
+
+void createNewFeedback() {
+	cout << "Please insert your feedback: " << endl;
+	string feedback;
+	bool validFeedback = false;
+	while (!validFeedback) {
+		feedback = listenForString();
+		validFeedback = true;
+		if (containsDelimiter(feedback)) {
+			validFeedback = false;
+			cout << "Feedback cannot contain the character \"|\"" << endl;
+		}
+	}
+	appendNewFeedback(feedback);
+	cout << "Thank you for your feedback!" << endl 
+		<< "It is very valuable to us and helps further improve our services." << endl;
+	cin.ignore(numeric_limits<streamsize>::max(), '\n');
+}
+
+void viewFeedback() {
+	bool exit = false;
+	bool actionMade = true;
+
+	while (!exit) {
+		if (actionMade) {
+			system("CLS");
+			getAllFeedback();
+			cout << left << "      " << setw(16) << "Username  " << setw(0) << " | " << "Description" << endl;
+
+			for (int i = 0; i < feedbackIndexed; i++) {
+				splitByDelimiter(feedbackArray[i], "|");
+				cout << right << "[" << setw(3) << i + 1  << "] " << left <<  setw(16) << SplitString[0] << setw(0) << " | " << SplitString[1] << endl;
+			}
+			cout << endl << "[x] Remove feedback" << endl
+				<< "[0] Exit" << endl;
+			actionMade = false;
+		}
+
+		switch (listenForChar()) {
+		case 'x':
+			cout << "Input selection index: ";
+			removeFeedback(getINTNumber() - 1);
+			actionMade = true;
+			break;
+		case '0':
+			exit = true;
+			break;
+		}
+	}
+}

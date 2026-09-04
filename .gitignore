@@ -374,3 +374,5 @@ FodyWeavers.xsd
 /LibraryManagementSystem/menu.cpp
 /LibraryManagementSystem/menu.h
 /LibraryManagementSystem/bookings
+/LibraryManagementSystem/borrows.txt
+/LibraryManagementSystem/feedback.txt
