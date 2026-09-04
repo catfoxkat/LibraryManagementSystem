@@ -15,6 +15,12 @@ using namespace std;
 
 namespace fs = filesystem;
 
+enum userProperties {
+	_username,
+	_password,
+	_permissionLevel
+};
+
 enum bookProperty { // do not rearrange!! it will break select menus and file handling, GREATLY!
 	ISBN,
 	Title,
@@ -38,37 +44,10 @@ struct account {
 	bool exists = false;
 };
 
+string getValidUsername();
+string getValidPassword();
 void registerFunction();
-
 void loginFunction();
-
-//----------------------------------------------------------------------------------------------------------
-
-struct book {
-	string ISBN;
-	string title;
-	string author;
-	string genre;
-	string language;
-
-	long long int pageCount = 0;
-	int available = 0; //how many available to borrow
-	int borrowed = 0; //how many currently borrowed
-};
-
-void addBook();
-void removeBook();
-void editBook(book *Book);
-void bookInterface();
-void bookSearchSubInterface();
-void displayAllBooks(bool sort = false, bookProperty BookProperty = ISBN, int selectionIndex = -1);
-void displayBookMenuInterface();
-void displayHeader();
-void displayBookDetails(int index, book Book, int selectionIndex = -1);
-void searchBookProperty();
-void sortBooksBy(bookProperty BookProperty);
-bookProperty selectBookProperty();
-void viewSelectBook(book currentSelectedBook);
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -84,7 +63,7 @@ const int maximumBookingDuration = 3; // how long each booking can last
 const int bookingHourStart = 8; // earliest a booking can start
 const int bookingHourEnd = 20; // latest a booking can end at
 
-int loadedFacilityScheduleFile[91][13];
+int loadedFacilityScheduleFile[91][13]; //first const must be sum of room amounts, 2nd const must be end - start + 1
 
 struct date {
 	int day;
@@ -93,14 +72,38 @@ struct date {
 };
 
 int getMonthMaxDate(int month);
-
 bool stringToDate(string str, date* Date);
-
 void facilityBookingInterface();
-
 void createBooking();
-
 void viewBooking();
+
+//----------------------------------------------------------------------------------------------------------
+
+struct book {
+	long long int ISBN = 0;
+	string title;
+	string author;
+	string genre; //could be optimized to be an int and get genre from an array
+	string language; //similar optimization to above
+
+	int pageCount = -1;
+	int available = -1; //how many available to borrow
+	int borrowed = -1; //how many currently borrowed
+};
+
+void addBook();
+void removeBookFunction();
+void editBook(book *Book);
+void bookInterface();
+void bookSearchSubInterface();
+void displayAllBooks(bool sort = false, bookProperty BookProperty = ISBN, int selectionIndex = -1);
+void displayBookMenuInterface();
+void displayHeader();
+void displayBookDetails(int index, book Book, int selectionIndex = -1);
+void searchBookProperty();
+bookProperty selectBookProperty();
+void viewSelectBook(book currentSelectedBook);
+void sortBooksBy(bookProperty BookProperty);
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -108,27 +111,22 @@ void initializeFiles();
 
 void initializeBookingFileStructure();
 
+int splitByDelimiter(string str, string delimiter);
+
 void loadORinitializeDateFile(date Date);
 
 void addBooking(date Date, int skipOffset, int startTime, int endTime);
 
-void appendNewAccount(string username, string password);
-
 void appendNewBook(book newBook);
-
-account getAccountByName(string username);
-
 void getBooksBy(bookProperty BookProperty, string Property);
-
 void getAllBooks();
+bool removeBook(long long int ISBN);
+void modifyBook(book* Book, bookProperty BookProperty, string Value);
 
-void removeBook(string ISBN);
-
+void appendNewAccount(string username, string password);
+account getAccountByName(string username);
 bool validateAccount(string username, string password);
-
-int splitByDelimiter(string str, string delimiter);
-
-void modifyBook(book *Book, bookProperty BookProperty, string Value);
+bool checkUsername(string username);
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -140,14 +138,24 @@ void countUser();
 
 //----------------------------------------------------------------------------------------------------------
 
+void manageUsers();
+void listAllAccounts(bool loadOnly = false);
+void selectViewAccount(string username = "");
+void modifyPermissionLevel(string username);
+
+void modifyAccountsFile(string username, userProperties Property, string newProperty, bool removeAccount = false);
+
+const int MAX_USER_ACCOUNTS = 512;
+string loadedAccounts[MAX_USER_ACCOUNTS];
+int currentTotalAccountsLoaded = 0;
+
+//----------------------------------------------------------------------------------------------------------
+
 int listenForInt();
-
 char listenForChar();
-
 string listenForString();
-
-long long int getNumber();
-
+int getINTNumber();
+long long int getLLNumber();
 bool promptYesNo(string message);
 
 //----------------------------------------------------------------------------------------------------------
@@ -176,7 +184,8 @@ void initBookSearchMenu();
 void initDisplayBookMenu();
 void initViewSelectedBookMenu(book Book);
 void initFacilityBookingMenu();
-void initFacilityBookingMenuViewBooking();
+void initManageUsersMenu();
+void initManageUserViewMenu(string accountString);
 
 menu Menu_Main;
 menu Menu_Main_Logged;
@@ -185,7 +194,9 @@ menu bookSearchMenu;
 menu displayBookMenu;
 menu viewSelectedBookMenu;
 menu facilityBookingMenu;
-menu facilityBookingMenuViewBooking;
+menu manageUsersMenu;
+menu manageUserViewMenu;
+
 //----------------------------------------------------------------------------------------------------------
 
 const int MAX_BOOKS = 512;
@@ -213,7 +224,8 @@ int main() {
 	initializeBookingFileStructure();
 	initMenu_Main();
 	initFacilityBookingMenu();
-	//initFacilityBookingMenuViewBooking();
+	initManageUsersMenu();
+
 
 	cin.ignore();
 	
@@ -283,6 +295,10 @@ void LoggedIn() {
 		case 4:
 			if (currentUser.permissionLevel == 1) { 
 				cout << "Manage users";
+				manageUsers();
+			}
+			else if (currentUser.permissionLevel == 0) {
+				selectViewAccount(currentUser.username);
 			}
 			break;
 		case 5:
@@ -295,110 +311,6 @@ void LoggedIn() {
 	}
 	return;
 }
-
-void initMenu_Main() {
-	Menu_Main = menu();
-	SetTitle(&Menu_Main, "Welcome to the library of [name here]!");
-	AppendNav(&Menu_Main, "Login");
-	AppendNav(&Menu_Main, "Register");
-	AppendNav(&Menu_Main, "Browse as guest");
-	AppendNav(&Menu_Main, "Quit", 0);
-}
-
-void initMenu_Main_Logged() {
-	Menu_Main_Logged = menu();
-	SetTitle(&Menu_Main_Logged, "Hello, " + currentUser.username + "!");
-
-	string accountType;
-	switch (currentUser.permissionLevel) {
-	case -1:
-		accountType = "Guest";
-		break;
-	case 0:
-		accountType = "User";
-		break;
-	case 1:
-		accountType = "Administrator";
-		break;
-	default:
-		accountType = "Unknown";
-		break;
-	}
-
-	SetDescription(&Menu_Main_Logged, "Permission level: " + to_string(currentUser.permissionLevel) + " (" + accountType + ")\n");
-
-	AppendNav(&Menu_Main_Logged, "Browse books");
-	if (currentUser.permissionLevel >= 0) {
-		AppendNav(&Menu_Main_Logged, "Facility booking");
-		AppendNav(&Menu_Main_Logged, "Feedback");
-	}
-	if (currentUser.permissionLevel == 1) {
-		AppendNav(&Menu_Main_Logged, "Manage users");
-		AppendNav(&Menu_Main_Logged, "Analysis");
-	}
-	AppendNav(&Menu_Main_Logged, "Log out", 0);
-}
-
-void initBookMenu() {
-	bookMenu = menu();
-	SetTitle(&bookMenu, "Books");
-	AppendNav(&bookMenu, "Search book");
-	if (currentUser.permissionLevel == 1) {
-		AppendNav(&bookMenu, "Add book");
-		AppendNav(&bookMenu, "Remove book");
-	}
-	AppendNav(&bookMenu, "Exit", 0);
-}
-
-void initBookSearchMenu() {
-	bookSearchMenu = menu();
-	SetTitle(&bookSearchMenu, "Search book");
-	AppendNav(&bookSearchMenu, "Display all books");
-	AppendNav(&bookSearchMenu, "By Property");
-	AppendNav(&bookSearchMenu, "Exit", 0);
-}
-
-void initDisplayBookMenu() {
-	displayBookMenu = menu();
-	AppendNav(&displayBookMenu, "Sort", -1, 's');
-	AppendNav(&displayBookMenu, "Select", -1, 'x');
-	AppendNav(&displayBookMenu, "View selected", -1, 'v');
-	AppendNav(&displayBookMenu, "Quit", 0);
-}
-
-void initViewSelectedBookMenu(book Book) {
-	viewSelectedBookMenu = menu();
-	SetTitle(&viewSelectedBookMenu, "Selected book: " + Book.title);
-	string Description =
-		"\n ISBN code\t: " + Book.ISBN +
-		"\n Title\t\t: " + Book.title +
-		"\n Author\t\t: " + Book.author +
-		"\n Genre\t\t: " + Book.genre +
-		"\n Language\t: " + Book.language +
-		"\n Page count\t: " + to_string(Book.pageCount) +
-		"\n Available\t: " + to_string(Book.available) +
-		"\n Borrowed\t: " + to_string(Book.borrowed) +
-		"\n";
-	SetDescription(&viewSelectedBookMenu, Description);
-
-	if (currentUser.permissionLevel >= 0) {
-		AppendNav(&viewSelectedBookMenu, "Borrow book");
-	}
-	if (currentUser.permissionLevel == 1) {
-		AppendNav(&viewSelectedBookMenu, "Edit book details");
-		AppendNav(&viewSelectedBookMenu, "Delete book");
-	}
-	AppendNav(&viewSelectedBookMenu, "Exit", 0);
-}
-
-void initFacilityBookingMenu() {
-	facilityBookingMenu = menu();
-	SetTitle(&facilityBookingMenu, "Facility booking");
-	AppendNav(&facilityBookingMenu, "Create booking");
-	AppendNav(&facilityBookingMenu, "View booking");
-	AppendNav(&facilityBookingMenu, "Exit", 0);
-}
-
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -421,13 +333,8 @@ static bool validString(string str) { //checks if string has invalid chars (rest
 	return true;
 }
 
-void registerFunction() {
-	if (!promptYesNo("Continue to registration? [y/n]\n")) {
-		return;
-	}
-	system("cls");
-
-	string username, password;
+string getValidUsername() {
+	string username;
 	bool pass = false;
 	while (!pass) {
 		cout << "Input username (Alphanumeric characters only, must be between 3 to 36 characters in length.)\n"; //probably add requirements like "Must be x chars, no symbols"
@@ -439,12 +346,19 @@ void registerFunction() {
 		else if (!valueInRange(static_cast<int>(username.length()), 3, 36)) {
 			cout << "Username must be between 3 to 36 characters in length.\n\n";
 		}
+		else if (checkUsername(username)) {
+			cout << "Username already taken.\n\n";
+		}
 		else {
 			pass = true;
 		}
-
 	}
-	pass = false;
+	return username;
+}
+
+string getValidPassword() {
+	string password;
+	bool pass = false;
 	while (!pass) {
 		cout << "Input password (Alphanumeric characters only, must be between 6 to 36 characters in length.)\n";
 		password = listenForString();
@@ -463,9 +377,18 @@ void registerFunction() {
 		else {
 			pass = true;
 		}
-
 	}
+	return password;
+}
 
+void registerFunction() {
+	if (!promptYesNo("Continue to registration? [y/n]\n")) {
+		return;
+	}
+	system("cls");
+
+	string username = getValidUsername(), password = getValidPassword();
+	
 	cout << "REGISTER ACCOUNT WITH USERNAME OF " << username << " AND PASSWORD OF " << password << endl;
 	appendNewAccount(username, password);
 }
@@ -495,256 +418,6 @@ void loginFunction() {
 		loginFunction();
 	}
 }
-
-//----------------------------------------------------------------------------------------------------------
-
-void bookInterface() {
-	bool exit = false;
-	while (!exit) {
-		DisplayPage(&bookMenu);
-		switch (listenForInt()) {
-		case 1:
-			bookSearchSubInterface();
-			break;
-		case 2:
-			if (currentUser.permissionLevel != 1) { break; }
-			addBook();
-			break;
-		case 3:
-			if (currentUser.permissionLevel != 1) { break; }
-			removeBook();
-			cout << "Removed" << "Press Enter to return..." << endl;
-			cin.ignore();
-			break;
-		case 0:
-			exit = true;
-			break;
-		}
-	}
-}
-
-void bookSearchSubInterface() {
-	bool exit = false;
-	while (!exit) {
-		DisplayPage(&bookSearchMenu);
-		switch (listenForInt()) {
-		case 1: {
-			getAllBooks();
-			displayAllBooks(false, ISBN);
-			displayBookMenuInterface();
-			break;
-		}
-		case 2:
-			searchBookProperty();
-			break;
-		case 0:
-			exit = true;
-			break;
-		}
-	}
-}
-
-void displayHeader() {
-	cout << left
-		<< "      "
-		<< setw(13) << "ISBN"
-		<< " | "
-		<< setw(64) << "TITLE"
-		<< " | "
-		<< setw(24) << "AUTHOR"
-		<< " | "
-		<< setw(16) << "GENRE"
-		<< " | "
-		<< setw(10) << "LANGUAGE"
-		<< " | "
-		<< setw(4) << "PAGE"
-		<< setw(0) << endl;
-}
-
-void displayBookDetails(int index, book Book, int selectionIndex) {
-	if (selectionIndex == index) {
-		cout << setw(6 + 13 + 64 + 24 + 16 + 10 + 4 + (5 * 3)) << setfill('=') << "" << endl;
-		cout << setfill(' ');
-	}
-	cout << right
-		<< "[" << setw(3) << index << "] "
-		<< left
-		<< setw(13) << Book.ISBN.substr(0, 13)
-		<< " | "
-		<< setw(64) << Book.title.substr(0, 64)
-		<< " | "
-		<< setw(24) << Book.author.substr(0, 24)
-		<< " | "
-		<< setw(16) << Book.genre.substr(0, 16)
-		<< " | "
-		<< setw(10) << Book.language.substr(0, 10)
-		<< " | "
-		<< setw(4) << to_string(Book.pageCount).substr(0, 4)
-		<< endl;
-	if (selectionIndex == index) {
-		cout << setw(6 + 13 + 64 + 24 + 16 + 10 + 4 + (5 * 3)) << setfill('=') << "" << endl;
-		cout << setfill(' ');
-	}
-	cout << setw(0);
-}
-
-void displayAllBooks(bool sort, bookProperty BookProperty, int selectionIndex) {
-	system("CLS");
-
-	if (sort) {
-		sortBooksBy(BookProperty);
-	}
-
-	displayHeader();
-	cout << endl;
-	for (int i = 0; i < BooksIndexed; i++) {
-		displayBookDetails(i + 1, BookArray[i], selectionIndex);
-	}
-}
-
-void displayBookMenuInterface() {
-	DisplayPage(&displayBookMenu, false);
-	bool exit = false;
-	bool actionMade = false;
-
-	long long int selectionIndex = -1;
-	book currentSelectedBook;
-	bool selectedBook = false;
-	bool sort = false;
-	bookProperty sortProperty = ISBN;
-
-	while (!exit) {
-		while (!actionMade) {
-			switch (listenForChar()) {
-			case 's':
-				selectionIndex = -1; //just deselect the selected book unless you want the selection to follow where the book was sorted to
-				currentSelectedBook = book();
-				sort = true;
-				sortProperty = selectBookProperty();
-				actionMade = true;
-				break;
-			case 'x':
-				cout << "Input selection index" << endl;
-				selectionIndex = getNumber();
-				if (selectionIndex <= 0 || selectionIndex > BooksIndexed) {
-					selectionIndex = -2;
-					currentSelectedBook = book();
-				}
-				else {
-					currentSelectedBook = BookArray[selectionIndex - 1];
-				}
-				
-				actionMade = true;
-				break;
-			case 'v':
-				if (selectionIndex <= 0 || selectionIndex > BooksIndexed) break;
-				viewSelectBook(currentSelectedBook);
-				getAllBooks();
-				if (selectionIndex > BooksIndexed) {
-					selectionIndex = -2;
-					currentSelectedBook = book();
-				}
-				else {
-					currentSelectedBook = BookArray[selectionIndex - 1];
-				}
-				actionMade = true;
-				break;
-			case '0':
-				actionMade = true;
-				exit = true;	
-			}
-		}
-
-		if (!exit) {
-			getAllBooks();
-			displayAllBooks(sort, sortProperty, (int)selectionIndex);
-			DisplayPage(&displayBookMenu, false);
-		}
-
-		if (sort) {
-			cout << "Displaying sorted" << endl;
-		}
-		if (selectionIndex == -2) {
-			cout << "INDEX OUT OF RANGE" << endl;
-		}
-		//sort = false;
-		//sortProperty = ISBN;
-		actionMade = false;
-	}
-}
-
-bookProperty selectBookProperty() {
-	cout << endl
-		<< "Select a property." << endl
-		<< "[1] ISBN" << endl
-		<< "[2] Title" << endl
-		<< "[3] Author" << endl
-		<< "[4] Genre" << endl
-		<< "[5] Language" << endl
-		<< "[6] Page Count" << endl;
-	int num;
-	while (true) {
-		num = listenForInt();
-		if (num > 6 || num < 1) {
-			continue;
-		}
-		break;
-	}
-	
-	return bookProperty(num - 1);
-}
-
-void searchBookProperty() {
-	system("CLS");
-	bookProperty BookProperty = selectBookProperty();
-	cout << "Search by : ";
-	getBooksBy(BookProperty, listenForString());
-	system("CLS");
-	if (BooksIndexed == 0) {
-		cout << "No entries found." << endl << "Press enter to return.";
-		cin.ignore();
-		return;
-	}
-	else {
-		cout << BooksIndexed << " entries found." << endl;
-		displayHeader();
-		cout << endl;
-		for (int i = 0; i < BooksIndexed; i++) {
-			displayBookDetails(i + 1, BookArray[i]);
-		}
-	}
-	displayBookMenuInterface();
-	return;
-}
-
-void viewSelectBook(book currentSelectedBook) {
-	bool exit = false;
-	while (!exit) {
-		initViewSelectedBookMenu(currentSelectedBook);
-		DisplayPage(&viewSelectedBookMenu);
-		switch (listenForInt()) {
-		case 1: 
-			if (currentUser.permissionLevel > 1) {
-				cout << "1 BORROW FUNCTION HERE";
-			}
-			break;
-		case 2:
-			if (currentUser.permissionLevel == 1) {
-				editBook(&currentSelectedBook);
-			}
-			break;
-		case 3:
-			if (currentUser.permissionLevel == 1) {
-				removeBook(currentSelectedBook.ISBN);
-				exit = true;
-			}
-			break;
-		case 0:
-			exit = true;
-			break;
-		}
-	}
- }
 
 //----------------------------------------------------------------------------------------------------------
 
@@ -849,7 +522,7 @@ void createBooking() {
 
 	do {
 		cout << "Number of persons (max: " << facilityTypesMaxPax[chosenType - 1] << "): ";
-		bookingPersonsAmount = getNumber();
+		bookingPersonsAmount = getINTNumber();
 		if (bookingPersonsAmount == -1) {
 			cout << "INVALID NUMBER, number of persons cannot be zero, contain, negative, decimal or non numeric values." << endl;
 			bookingPersonsAmount = 0;
@@ -942,16 +615,16 @@ void createBooking() {
 				cout << endl;
 			}
 			cout << endl << "Select a room: ";
-			int thisRoomSelection = getNumber();
+			int thisRoomSelection = getINTNumber();
 			if (thisRoomSelection > 0 && thisRoomSelection <= facilityTypeRoomAmount[chosenType])
 				roomSelection = thisRoomSelection;
 		}
 		int startTime, endTime;
 
 		cout << "Input start time of booking: ";
-		startTime = getNumber();
+		startTime = getINTNumber();
 		cout << "Input end time of booking: ";
-		endTime = getNumber();
+		endTime = getINTNumber();
 
 		if (endTime - startTime> maximumBookingDuration - 1) {
 			cout << "Booking duration exceeds maximum hours (" << maximumBookingDuration << ")" << endl;
@@ -1007,8 +680,8 @@ void viewBooking() {
 	loadORinitializeDateFile(Date);
 
 
-	int skipOffset;
-	int endRoomIndex;
+	int skipOffset = 0;
+	int endRoomIndex = 0;
 
 	switch (chosenType) {
 	case 1:
@@ -1065,22 +738,37 @@ static bool containsDelimiter(string str) {
 	return false;
 }
 
+constexpr int digitsLength(long long int x) { // its either this or conversion to string to count length, reference code: https://stackoverflow.com/a/31576530
+	return
+		(x < 0 ? 0 :
+		(x < 10 ? 1 :
+		(x < 100 ? 2 :
+		(x < 1000 ? 3 :
+		(x < 10000 ? 4 :
+		(x < 100000 ? 5 :
+		(x < 1000000 ? 6 :
+		(x < 10000000 ? 7 :
+		(x < 100000000 ? 8 :
+		(x < 1000000000 ? 9 :
+		(x < 10000000000 ? 10 :
+		(x < 100000000000 ? 11 :
+		(x < 1000000000000 ? 12 :
+		(x < 10000000000000 ? 13 : 
+			14))))))))))))));
+}
+
 void addBook() {
 	book newBook;
 
 	do {
 		cout << "Enter book ISBN: ";
-		string ISBN = listenForString();
-		if (!(ISBN.length() == 10 || ISBN.length() == 13)) {
+		long long int ISBN = getLLNumber();
+		if (!(digitsLength(ISBN) == 10 || digitsLength(ISBN) == 13)) {
 			cout << "INVALID ISBN, ISBN must be 10 (ISBN10) or 13 (ISBN13) numbers long." << endl;
 			continue;
 		}
-		if (!hasOnlyInt(ISBN)) {
-			cout << "INVALID ISBN, ISBN cannot contain non numeric values." << endl;
-			continue;
-		}
 		newBook.ISBN = ISBN;
-	} while (newBook.ISBN == "");
+	} while (newBook.ISBN == 0);
 	
 	do {
 		cout << "Enter book title: ";
@@ -1125,24 +813,37 @@ void addBook() {
 
 	do {
 		cout << "Enter number of pages: ";
-		long long int PAGECOUNT = getNumber();
+		int PAGECOUNT = getINTNumber();
 		if (PAGECOUNT == -1) {
 			cout << "INVALID PAGECOUNT, PAGECOUNT cannot be zero, contain, negative, decimal or non numeric values." << endl;
 			continue;
 		}
 		newBook.pageCount = PAGECOUNT;
-		appendNewBook(newBook);
-	} while (newBook.pageCount == 0);
+	} while (newBook.pageCount == -1);
 	
+	do {
+		cout << "Enter available amount of book: ";
+		int AVAILABLE = getINTNumber();
+		if (AVAILABLE == -1) {
+			cout << "INVALID AVAILABLE, AVAILABLE cannot be zero, contain, negative, decimal or non numeric values." << endl;
+			continue;
+		}
+		newBook.available = AVAILABLE;
+	} while (newBook.available == -1);
 
+	appendNewBook(newBook);
 	cout << "Book added successfully." << endl;
 	cout << "Press Enter to return...";
 	cin.ignore();
 };
 
-void removeBook() {
+void removeBookFunction() {
 	cout << "Enter ISBN of book to remove: ";
-	removeBook(listenForString());
+	if (removeBook(getLLNumber()))
+		cout << "Removal of book successful.";
+	else
+		cout << "Could not remove book.";
+		
 }
 
 void editBook(book *Book) {
@@ -1191,7 +892,332 @@ void editBook(book *Book) {
 	return;
 }
 
+void bookInterface() {
+	bool exit = false;
+	while (!exit) {
+		DisplayPage(&bookMenu);
+		switch (listenForInt()) {
+		case 1:
+			bookSearchSubInterface();
+			break;
+		case 2:
+			if (currentUser.permissionLevel != 1) { break; }
+			addBook();
+			break;
+		case 3:
+			if (currentUser.permissionLevel != 1) { break; }
+			removeBookFunction();
+			cout << "Press Enter to return..." << endl;
+			cin.ignore();
+			break;
+		case 0:
+			exit = true;
+			break;
+		}
+	}
+}
+
+void bookSearchSubInterface() {
+	bool exit = false;
+	while (!exit) {
+		DisplayPage(&bookSearchMenu);
+		switch (listenForInt()) {
+		case 1: {
+			getAllBooks();
+			displayAllBooks(false, ISBN);
+			displayBookMenuInterface();
+			break;
+		}
+		case 2:
+			searchBookProperty();
+			break;
+		case 0:
+			exit = true;
+			break;
+		}
+	}
+}
+
+void displayHeader() {
+	cout << left
+		<< "      "
+		<< setw(13) << "ISBN"
+		<< " | "
+		<< setw(64) << "TITLE"
+		<< " | "
+		<< setw(24) << "AUTHOR"
+		<< " | "
+		<< setw(16) << "GENRE"
+		<< " | "
+		<< setw(10) << "LANGUAGE"
+		<< " | "
+		<< setw(4) << "PAGE"
+		<< setw(0) << endl;
+}
+
+void displayBookDetails(int index, book Book, int selectionIndex) {
+	if (selectionIndex == index) {
+		cout << setw(6 + 13 + 64 + 24 + 16 + 10 + 4 + (5 * 3)) << setfill('=') << "" << endl;
+		cout << setfill(' ');
+	}
+	cout << right
+		<< "[" << setw(3) << index << "] "
+		<< left
+		<< setw(13) << to_string(Book.ISBN).substr(0, 13)
+		<< " | "
+		<< setw(64) << Book.title.substr(0, 64)
+		<< " | "
+		<< setw(24) << Book.author.substr(0, 24)
+		<< " | "
+		<< setw(16) << Book.genre.substr(0, 16)
+		<< " | "
+		<< setw(10) << Book.language.substr(0, 10)
+		<< " | "
+		<< setw(4) << to_string(Book.pageCount).substr(0, 4)
+		<< endl;
+	if (selectionIndex == index) {
+		cout << setw(6 + 13 + 64 + 24 + 16 + 10 + 4 + (5 * 3)) << setfill('=') << "" << endl;
+		cout << setfill(' ');
+	}
+	cout << setw(0);
+}
+
+void displayAllBooks(bool sort, bookProperty BookProperty, int selectionIndex) {
+	system("CLS");
+
+	if (sort) {
+		sortBooksBy(BookProperty);
+	}
+
+	displayHeader();
+	cout << endl;
+	for (int i = 0; i < BooksIndexed; i++) {
+		displayBookDetails(i + 1, BookArray[i], selectionIndex);
+	}
+}
+
+void displayBookMenuInterface() {
+	DisplayPage(&displayBookMenu, false);
+	bool exit = false;
+	bool actionMade = false;
+
+	int selectionIndex = -1;
+	book currentSelectedBook;
+	bool selectedBook = false;
+	bool sort = false;
+	bookProperty sortProperty = ISBN;
+
+	while (!exit) {
+		while (!actionMade) {
+			switch (listenForChar()) {
+			case 's':
+				selectionIndex = -1; //just deselect the selected book unless you want the selection to follow where the book was sorted to
+				currentSelectedBook = book();
+				sort = true;
+				sortProperty = selectBookProperty();
+				actionMade = true;
+				break;
+			case 'x':
+				cout << "Input selection index" << endl;
+				selectionIndex = getINTNumber();
+				if (selectionIndex <= 0 || selectionIndex > BooksIndexed) {
+					selectionIndex = -2;
+					currentSelectedBook = book();
+				}
+				else {
+					currentSelectedBook = BookArray[selectionIndex - 1];
+				}
+
+				actionMade = true;
+				break;
+			case 'v':
+				if (selectionIndex <= 0 || selectionIndex > BooksIndexed) break;
+				viewSelectBook(currentSelectedBook);
+				getAllBooks();
+				if (selectionIndex > BooksIndexed) {
+					selectionIndex = -2;
+					currentSelectedBook = book();
+				}
+				else {
+					currentSelectedBook = BookArray[selectionIndex - 1];
+				}
+				actionMade = true;
+				break;
+			case '0':
+				actionMade = true;
+				exit = true;
+			}
+		}
+
+		if (!exit) {
+			getAllBooks();
+			displayAllBooks(sort, sortProperty, (int)selectionIndex);
+			DisplayPage(&displayBookMenu, false);
+		}
+
+		if (sort) {
+			cout << "Displaying sorted" << endl;
+		}
+		if (selectionIndex == -2) {
+			cout << "INDEX OUT OF RANGE" << endl;
+		}
+		//sort = false;
+		//sortProperty = ISBN;
+		actionMade = false;
+	}
+}
+
+bookProperty selectBookProperty() {
+	cout << endl
+		<< "Select a property." << endl
+		<< "[1] ISBN" << endl
+		<< "[2] Title" << endl
+		<< "[3] Author" << endl
+		<< "[4] Genre" << endl
+		<< "[5] Language" << endl
+		<< "[6] Page Count" << endl;
+	int num;
+	while (true) {
+		num = listenForInt();
+		if (num > 6 || num < 1) {
+			continue;
+		}
+		break;
+	}
+
+	return bookProperty(num - 1);
+}
+
+void searchBookProperty() {
+	system("CLS");
+	bookProperty BookProperty = selectBookProperty();
+	cout << "Search by : ";
+	getBooksBy(BookProperty, listenForString());
+	system("CLS");
+	if (BooksIndexed == 0) {
+		cout << "No entries found." << endl << "Press enter to return.";
+		cin.ignore();
+		return;
+	}
+	else {
+		cout << BooksIndexed << " entries found." << endl;
+		displayHeader();
+		cout << endl;
+		for (int i = 0; i < BooksIndexed; i++) {
+			displayBookDetails(i + 1, BookArray[i]);
+		}
+	}
+	displayBookMenuInterface();
+	return;
+}
+
+void viewSelectBook(book currentSelectedBook) {
+	bool exit = false;
+	while (!exit) {
+		initViewSelectedBookMenu(currentSelectedBook);
+		DisplayPage(&viewSelectedBookMenu);
+		switch (listenForInt()) {
+		case 1:
+			if (currentUser.permissionLevel > 1) {
+				cout << "1 BORROW FUNCTION HERE";
+			}
+			break;
+		case 2:
+			if (currentUser.permissionLevel == 1) {
+				editBook(&currentSelectedBook);
+			}
+			break;
+		case 3:
+			if (currentUser.permissionLevel == 1) {
+				removeBook(currentSelectedBook.ISBN);
+				exit = true;
+			}
+			break;
+		case 0:
+			exit = true;
+			break;
+		}
+	}
+}
+
 //----------------------------------------------------------------------------------------------------------
+
+static long long int convertToComparisonINT(bookProperty BookProperty, string Str) { //only uses first letter of string ASCII code, or entire int
+	if (Str.length() == 0 || Str == "") {
+		return 0;
+	}
+	switch (BookProperty) {
+	case ISBN:
+		return stoll(Str);
+	case PageCount:
+		return stoi(Str);
+
+	case Title:
+	case Genre:
+	case Author:
+	case Language:
+		return (int)(Str[0]); //use first letter for sorting unless you want to sort through the whole string using recursion
+
+	default:
+		cout << "Error with bookProperty";
+		return 0;
+	}
+}
+
+static string getPropertyFromBook(bookProperty BookProperty, book Book) {
+	switch (BookProperty) {
+	case ISBN:
+		return to_string(Book.ISBN);
+	case Title:
+		return Book.title;
+	case Genre:
+		return Book.genre;
+	case Author:
+		return Book.author;
+	case Language:
+		return Book.language;
+	case PageCount:
+		return to_string(Book.pageCount);
+	default:
+		throw "Error with book property";
+	}
+}
+
+void sortBooksBy(bookProperty BookProperty) {
+	if (BooksIndexed < 2) return;
+	int position = 0;
+	long long int comparisonArray[MAX_BOOKS];
+	long long int startComparisonInt;
+	for (int i = 0; i < BooksIndexed; i++) {
+		comparisonArray[i] = convertToComparisonINT(BookProperty, getPropertyFromBook(BookProperty, BookArray[i]));
+	}
+
+	do {
+		long long int smallest = comparisonArray[position];
+		startComparisonInt = smallest;
+		int positionSmall = 0;
+
+		for (int i = position + 1; i < BooksIndexed; i++) {
+
+			if (smallest > comparisonArray[i]) {
+				smallest = comparisonArray[i];
+				positionSmall = i;
+			}
+		}
+		if (startComparisonInt == smallest) {
+			position++; continue;
+		}
+
+		swap(BookArray[position], BookArray[positionSmall]);
+
+		swap(comparisonArray[position], comparisonArray[positionSmall]);
+		position++;
+
+	} while (!(position == BooksIndexed - 1));
+}
+
+//----------------------------------------------------------------------------------------------------------
+
 void initializeFiles() {
 	cout << "=== FILEHANDLER ===" << endl;
 	cout << "CURRENT DIRECTORY: \t" << CURRENT_DIRECTORY << endl;
@@ -1252,6 +1278,20 @@ void initializeBookingFileStructure() {
 			cout << "\t\t- month " << Months[i] << " directory created\n";
 		}
 	}
+}
+
+int splitByDelimiter(string str, string delimiter) {
+	size_t pos = 0;
+	string token;
+	int i = 0;
+	while ((pos = str.find(delimiter)) != string::npos) {
+		token = str.substr(0, pos);
+		SplitString[i] = token;
+		str.erase(0, pos + delimiter.length());
+		i++;
+	}
+	SplitString[i] = str;
+	return i + 1;
 }
 
 void loadORinitializeDateFile(date Date) {
@@ -1320,12 +1360,6 @@ void addBooking(date Date, int skipOffset, int startTime, int endTime) {
 	return;
 }
 
-void appendNewAccount(string username, string password) {
-	ofstream accounts; accounts.open(ACCOUNTS_PATH, ios_base::app);
-	accounts << username << Delimiter << password << ", 0" << endl;  //unsure if ", " should be used as a seperator. structure exp?: "[USR], [PWD], [PERMISSIONLVL]\n" 
-	accounts.close();
-}
-
 void appendNewBook(book newBook)
 {
 	ofstream booksFile;
@@ -1339,25 +1373,151 @@ void appendNewBook(book newBook)
 		<< newBook.genre << BookDelimiter
 		<< newBook.language << BookDelimiter
 		<< newBook.pageCount << BookDelimiter
-		<< 0 << BookDelimiter
+		<< newBook.available << BookDelimiter
 		<< 0 << BookDelimiter
 		<< endl;
 
 	booksFile.close();
 }
 
-int splitByDelimiter(string str, string delimiter) {
-	size_t pos = 0;
-	string token;
+void getBooksBy(bookProperty BookProperty, string Property) {
+	ifstream books(BOOKS_PATH, ios::in);
+	string line;
 	int i = 0;
-	while ((pos = str.find(delimiter)) != string::npos) {
-		token = str.substr(0, pos);
-		SplitString[i] = token;
-		str.erase(0, pos + delimiter.length());
+	while (getline(books, line)) {
+		int splits = splitByDelimiter(line, BookDelimiter);
+
+		if (SplitString[(int)BookProperty] == Property) {
+			book Book;
+			Book.ISBN = stoll(SplitString[0]);
+			Book.title = SplitString[1];
+			Book.author = SplitString[2];
+			Book.genre = SplitString[3];
+			Book.language = SplitString[4];
+			Book.pageCount = stoi(SplitString[5]);
+			Book.available = stoi(SplitString[6]);
+			Book.borrowed = stoi(SplitString[7]);
+			BookArray[i] = Book;
+			i++;
+		}
+	}
+	BooksIndexed = i;
+	books.close();
+	return;
+
+}
+
+void getAllBooks() {
+	ifstream books(BOOKS_PATH, ios::in);
+	string line;
+	int i = 0;
+	while (getline(books, line)) {
+		splitByDelimiter(line, BookDelimiter);
+		book Book;
+		Book.ISBN = stoll(SplitString[0]);
+		Book.title = SplitString[1];
+		Book.author = SplitString[2];
+		Book.genre = SplitString[3];
+		Book.language = SplitString[4];
+		Book.pageCount = stoi(SplitString[5]);
+		Book.available = stoi(SplitString[6]);
+		Book.borrowed = stoi(SplitString[7]);
+		BookArray[i] = Book;
 		i++;
 	}
-	SplitString[i] = str;
-	return i + 1;
+	BooksIndexed = i;
+	books.close();
+	return;
+}
+
+bool removeBook(long long int ISBN) { //remove line with the matched ISBN
+	bool removed = false;
+	ifstream books(BOOKS_PATH, ios::in);
+	ofstream newBooks;
+	newBooks.open("temp.txt");
+	string line;
+	while (getline(books, line)) {
+		splitByDelimiter(line, BookDelimiter);
+		if (stoll(SplitString[0]) != ISBN) {
+			newBooks << line << endl;
+			removed = true;
+		}
+	}
+
+	newBooks.close();
+	books.close();
+
+	remove("books.txt");
+	rename("temp.txt", fs::current_path() / "books.txt");
+	return removed;
+}
+
+void modifyBook(book* Book, bookProperty BookProperty, string Value) {
+	string comparisonISBN = "";
+	switch (BookProperty) {
+	case ISBN:
+		comparisonISBN = to_string(Book->ISBN);
+		Book->ISBN = stoll(Value);
+		break;
+	case Title:
+		Book->title = Value;
+		break;
+	case Author:
+		Book->author = Value;
+		break;
+	case Genre:
+		Book->genre = Value;
+		break;
+	case Language:
+		Book->language = Value;
+		break;
+	case PageCount:
+		Book->pageCount = stoi(Value);
+		break;
+	case Available:
+		Book->available = stoi(Value);
+		break;
+	case Borrowed:
+		Book->borrowed = stoi(Value);
+		break;
+	}
+
+	ifstream books(BOOKS_PATH, ios::in);
+	ofstream newBooks;
+	newBooks.open("temp.txt");
+	string line;
+	if (comparisonISBN == "")
+		comparisonISBN = to_string(Book->ISBN);
+
+	while (getline(books, line)) {
+		splitByDelimiter(line, BookDelimiter);
+		if (SplitString[0] != to_string(Book->ISBN) && SplitString[0] != comparisonISBN) {
+			newBooks << line << endl;
+		}
+		if (SplitString[0] == to_string(Book->ISBN) || SplitString[0] == comparisonISBN)
+			newBooks
+			<< Book->ISBN << BookDelimiter
+			<< Book->title << BookDelimiter
+			<< Book->author << BookDelimiter
+			<< Book->genre << BookDelimiter
+			<< Book->language << BookDelimiter
+			<< Book->pageCount << BookDelimiter
+			<< Book->available << BookDelimiter
+			<< Book->borrowed
+			<< endl;
+
+	}
+	newBooks.close();
+	books.close();
+
+	remove("books.txt");
+	rename("temp.txt", fs::current_path() / "books.txt");
+}
+
+void appendNewAccount(string username, string password) {
+	ofstream accounts; accounts.open(ACCOUNTS_PATH, ios_base::app);
+	accounts << username << Delimiter << password << ", 0" << endl; //structure: "[USR], [PWD], [PERMISSIONLVL] ENDL" 
+	accounts.close();
 }
 
 account getAccountByName(string username) { //name pass role
@@ -1381,76 +1541,6 @@ account getAccountByName(string username) { //name pass role
 	return account(); //return default exists? false
 }
 
-void getBooksBy(bookProperty BookProperty, string Property) {
-	ifstream books(BOOKS_PATH, ios::in);
-	string line;
-	int i = 0;
-	while (getline(books, line)) {
-		int splits = splitByDelimiter(line, BookDelimiter);
-		
-		if (SplitString[(int)BookProperty] == Property) {
-			book Book;
-			Book.ISBN = SplitString[0];
-			Book.title = SplitString[1];
-			Book.author = SplitString[2];
-			Book.genre = SplitString[3];
-			Book.language = SplitString[4];
-			Book.pageCount = stoll(SplitString[5]);
-			Book.available = stoi(SplitString[6]);
-			Book.borrowed = stoi(SplitString[7]);
-			BookArray[i] = Book;
-			i++;
-		}
-	}
-	BooksIndexed = i;
-	books.close();
-	return;
-	
-}
-
-void getAllBooks() {
-	ifstream books(BOOKS_PATH, ios::in);
-	string line;
-	int i = 0;
-	while (getline(books, line)) {
-		splitByDelimiter(line, BookDelimiter);
-		book Book;
-		Book.ISBN = SplitString[0];
-		Book.title = SplitString[1];
-		Book.author = SplitString[2];
-		Book.genre = SplitString[3];
-		Book.language = SplitString[4];
-		Book.pageCount = stoll(SplitString[5]);
-		Book.available = stoi(SplitString[6]);
-		Book.borrowed = stoi(SplitString[7]);
-		BookArray[i] = Book;
-		i++;
-	}
-	BooksIndexed = i;
-	books.close();
-	return;
-}
-
-void removeBook(string ISBN) { //remove line with the matched ISBN
-	ifstream books(BOOKS_PATH, ios::in);
-	ofstream newBooks;
-	newBooks.open("temp.txt");
-	string line;
-	while (getline(books, line)) {
-		splitByDelimiter(line, BookDelimiter);
-		if (SplitString[0] != ISBN) {
-			newBooks << line << endl;
-		}
-	}
-
-	newBooks.close();
-	books.close();
-
-	remove("books.txt");
-	rename("temp.txt", fs::current_path() / "books.txt");
-	return;
-}
-
 bool validateAccount(string username, string password) {
 	ifstream accounts(ACCOUNTS_PATH, ios::in);
 	string line;
@@ -1468,67 +1558,21 @@ bool validateAccount(string username, string password) {
 	return false;
 }
 
-void modifyBook(book *Book, bookProperty BookProperty, string Value) {
-	string comparisonISBN = "";
-	switch (BookProperty) {
-	case ISBN:
-		comparisonISBN = Book->ISBN;
-		Book->ISBN = Value;
-		break;
-	case Title:
-		Book->title = Value;
-		break;
-	case Author:
-		Book->author = Value;
-		break;
-	case Genre:
-		Book->genre = Value;
-		break;
-	case Language:
-		Book->language = Value;
-		break;
-	case PageCount:
-		Book->pageCount = stoi(Value);
-		break;
-	case Available:
-		Book->available= stoi(Value);
-		break;
-	case Borrowed:
-		Book->borrowed = stoi(Value);
-		break;
-	}
-
-	ifstream books(BOOKS_PATH, ios::in);
-	ofstream newBooks;
-	newBooks.open("temp.txt");
+bool checkUsername(string username) {
+	ifstream accounts(ACCOUNTS_PATH, ios::in);
 	string line;
-	if (comparisonISBN == "")
-		comparisonISBN = Book->ISBN;
-
-	while (getline(books, line)) {
-		splitByDelimiter(line, BookDelimiter);
-		if (SplitString[0] != Book->ISBN && SplitString[0] != comparisonISBN) {
-			newBooks << line << endl;
+	while (getline(accounts, line)) {
+		int splits = splitByDelimiter(line, Delimiter);
+		if (splits < 3) {
+			cout << "Invalid account format, skipping..." << endl << endl;
+			continue;
 		}
-		if (SplitString[0] == Book->ISBN || SplitString[0] == comparisonISBN)
-			newBooks
-			<< Book->ISBN << BookDelimiter
-			<< Book->title << BookDelimiter
-			<< Book->author << BookDelimiter
-			<< Book->genre << BookDelimiter
-			<< Book->language << BookDelimiter
-			<< Book->pageCount << BookDelimiter
-			<< Book->available << BookDelimiter
-			<< Book->borrowed
-			<< endl;
-
+		if (SplitString[0] == username) {
+			return true;
+		}
 	}
-	newBooks.close();
-	books.close();
 
-	remove("books.txt");
-	rename("temp.txt", fs::current_path() / "books.txt");
-	return;
+	return false;
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -1718,7 +1762,153 @@ void countUser() {
 
 //----------------------------------------------------------------------------------------------------------
 
-static int keyToInt(int key) {
+void manageUsers() {
+	bool exit = false;
+
+	system("CLS");
+	listAllAccounts();
+	DisplayPage(&manageUsersMenu, false);
+	while (!exit) {
+		switch (listenForChar()) {
+		case 'x':
+			if (currentTotalAccountsLoaded == 0)
+				break;
+			selectViewAccount();
+			break;
+		case '0':
+			exit = true;
+			break;
+		}
+
+		system("CLS");
+		listAllAccounts();
+		DisplayPage(&manageUsersMenu, false);
+	}
+}
+
+void listAllAccounts(bool loadOnly) {
+	ifstream accounts("accounts.txt");
+	string line;
+	int index = 1;
+	int amount = 0;
+	while (getline(accounts, line)) {
+		if (!loadOnly) {
+			splitByDelimiter(line, Delimiter);
+			cout << "[" << setw(3) << index++ << "] "
+				<< SplitString[0] << endl;
+		}
+		loadedAccounts[amount] = line;
+		amount++;
+	}
+	accounts.close();
+	currentTotalAccountsLoaded = amount;
+}
+
+void selectViewAccount(string username) {
+	int selectionIndex;
+	if (username == "") {
+		cout << "Input selection index: ";
+		selectionIndex = getINTNumber();
+		if (!valueInRange(selectionIndex, 1, currentTotalAccountsLoaded))
+			return;
+		selectionIndex--;
+	}
+	else {
+		listAllAccounts(true);
+		for (int i = 0; i < currentTotalAccountsLoaded; i++) {
+			splitByDelimiter(loadedAccounts[i], Delimiter);
+			if (SplitString[0] == username) {
+				selectionIndex = i;
+				break;
+			}
+				
+		}
+			
+	}
+
+	bool exit = false;
+	bool actionMade = true;
+	while (!exit) {
+		if (actionMade) {
+			actionMade = false;
+			listAllAccounts(true);
+			string accountString = loadedAccounts[selectionIndex];
+			splitByDelimiter(accountString, Delimiter);
+			if (username == "")
+				username = SplitString[0];
+			initManageUserViewMenu(accountString);
+			DisplayPage(&manageUserViewMenu);
+		}
+
+		switch (listenForInt()) {
+		case 1:
+			modifyAccountsFile(username, _username, getValidUsername(), false);
+			actionMade = true;
+			break;
+		case 2:
+			modifyAccountsFile(username, _password, getValidPassword(), false);
+			actionMade = true;
+			break;
+		case 3:
+			if (currentUser.permissionLevel == 1) {
+				modifyPermissionLevel(username);
+				actionMade = true;
+			}
+			break;
+		case 4:
+			modifyAccountsFile(username, _username, "", true);
+			exit = true;
+			break;
+		case 0:
+			exit = true;
+			break;
+		}
+	}
+}
+
+void modifyPermissionLevel(string username) {
+	int level = -1;
+	while (level < 0) {
+		cout << "Enter Permission level" << endl;
+		level = getINTNumber();
+		if (!valueInRange(level, 0, 1)) {
+			level = -1;
+			cout << "Invalid Permission level" << endl;
+		}
+			
+	}
+	modifyAccountsFile(username, _permissionLevel, to_string(level));
+}
+
+void modifyAccountsFile(string username, userProperties Property, string newProperty, bool removeAccount) {
+	ifstream accounts(ACCOUNTS_PATH, ios::in);
+	ofstream newAccounts;
+	newAccounts.open("temp.txt");
+	string line;
+	while (getline(accounts, line)) {
+		splitByDelimiter(line, Delimiter);
+		if (SplitString[0] != username) {
+			newAccounts << line << endl;
+		}
+		else if (SplitString[0] == username && !removeAccount) {
+			SplitString[(int)userProperties(Property)] = newProperty;
+			newAccounts
+				<< SplitString[0] << Delimiter
+				<< SplitString[1] << Delimiter
+				<< SplitString[2]
+				<< endl;
+		}
+	}
+	newAccounts.close();
+	accounts.close();
+
+	remove("accounts.txt");
+	rename("temp.txt", fs::current_path() / "accounts.txt");
+}
+
+//----------------------------------------------------------------------------------------------------------
+
+static int keyToInt(int key) { //usage of maps (dictionary) is not allowed
 	switch (key) {
 	case 48:
 		return 0;
@@ -1759,7 +1949,16 @@ char listenForChar() {
 	return char(_getch());
 }
 
-long long int getNumber() {
+int getINTNumber() {
+	try {
+		return stoi(listenForString());
+	}
+	catch (...) {
+		return -1;
+	}
+}
+
+long long int getLLNumber() {
 	try {
 		return stoll(listenForString());
 	}
@@ -1824,77 +2023,129 @@ void DisplayPage(menu* Menu, bool clearScreen) {
 
 //----------------------------------------------------------------------------------------------------------
 
-static long long int convertToComparisonINT(bookProperty BookProperty, string Str) { //only uses first letter of string ASCII code, or entire int
-	if (Str.length() == 0 || Str == "") {
-		return 0;
-	}
-	switch (BookProperty) {
-	case ISBN:
-	case PageCount:
-		return stoll(Str);
+void initMenu_Main() {
+	Menu_Main = menu();
+	SetTitle(&Menu_Main, "Welcome to the library of [name here]!");
+	AppendNav(&Menu_Main, "Login");
+	AppendNav(&Menu_Main, "Register");
+	AppendNav(&Menu_Main, "Browse as guest");
+	AppendNav(&Menu_Main, "Quit", 0);
+}
 
-	case Title:
-	case Genre:
-	case Author:
-	case Language:
-		return (int)(Str[0]);
+void initMenu_Main_Logged() {
+	Menu_Main_Logged = menu();
+	SetTitle(&Menu_Main_Logged, "Hello, " + currentUser.username + "!");
 
+	string accountType;
+	switch (currentUser.permissionLevel) {
+	case -1:
+		accountType = "Guest";
+		break;
+	case 0:
+		accountType = "User";
+		break;
+	case 1:
+		accountType = "Administrator";
+		break;
 	default:
-		cout << "Error with bookProperty";
-		return 0;
-	}
-}
-
-static string getPropertyFromBook(bookProperty BookProperty, book Book) {
-	switch (BookProperty) {
-	case ISBN:
-		return Book.ISBN;
-	case Title:
-		return Book.title;
-	case Genre:
-		return Book.genre;
-	case Author:
-		return Book.author;
-	case Language:
-		return Book.language;
-	case PageCount:
-		return to_string(Book.pageCount);
-	default:
-		cout << "Error with book property";
-		return "";
-	}
-	return "";
-}
-
-void sortBooksBy(bookProperty BookProperty) {
-	if (BooksIndexed < 2) return;
-	int position = 0;
-	long long int comparisonArray[MAX_BOOKS];
-	long long int startComparisonInt;
-	for (int i = 0; i < BooksIndexed; i++) {
-		comparisonArray[i] = convertToComparisonINT(BookProperty, getPropertyFromBook(BookProperty, BookArray[i]));
+		accountType = "Unknown";
+		break;
 	}
 
-	do {
-		long long int smallest = comparisonArray[position];
-		startComparisonInt = smallest;
-		int positionSmall = 0;
+	SetDescription(&Menu_Main_Logged, "Permission level: " + to_string(currentUser.permissionLevel) + " (" + accountType + ")\n");
 
-		for (int i = position + 1; i < BooksIndexed; i++) {
-
-			if (smallest > comparisonArray[i]) {
-				smallest = comparisonArray[i];
-				positionSmall = i;
-			}
-		}
-		if (startComparisonInt == smallest) {
-			position++; continue;
-		}
-		
-		swap(BookArray[position], BookArray[positionSmall]);
-		
-		swap(comparisonArray[position], comparisonArray[positionSmall]);
-		position++;
-
-	} while (!(position == BooksIndexed - 1));		
+	AppendNav(&Menu_Main_Logged, "Browse books");
+	if (currentUser.permissionLevel >= 0) {
+		AppendNav(&Menu_Main_Logged, "Facility booking");
+		AppendNav(&Menu_Main_Logged, "Feedback");
+	}
+	if (currentUser.permissionLevel == 1) {
+		AppendNav(&Menu_Main_Logged, "Manage users"); //"Manage account" for Perm level 0
+		AppendNav(&Menu_Main_Logged, "Analysis");
+	}
+	else if (currentUser.permissionLevel == 0) {
+		AppendNav(&Menu_Main_Logged, "Manage account");
+	}
+	AppendNav(&Menu_Main_Logged, "Log out", 0);
 }
+
+void initBookMenu() {
+	bookMenu = menu();
+	SetTitle(&bookMenu, "Books");
+	AppendNav(&bookMenu, "Search book");
+	if (currentUser.permissionLevel == 1) {
+		AppendNav(&bookMenu, "Add book");
+		AppendNav(&bookMenu, "Remove book");
+	}
+	AppendNav(&bookMenu, "Exit", 0);
+}
+
+void initBookSearchMenu() {
+	bookSearchMenu = menu();
+	SetTitle(&bookSearchMenu, "Search book");
+	AppendNav(&bookSearchMenu, "Display all books");
+	AppendNav(&bookSearchMenu, "By Property");
+	AppendNav(&bookSearchMenu, "Exit", 0);
+}
+
+void initDisplayBookMenu() {
+	displayBookMenu = menu();
+	AppendNav(&displayBookMenu, "Sort", -1, 's');
+	AppendNav(&displayBookMenu, "Select", -1, 'x');
+	AppendNav(&displayBookMenu, "View selected", -1, 'v');
+	AppendNav(&displayBookMenu, "Quit", 0);
+}
+
+void initViewSelectedBookMenu(book Book) {
+	viewSelectedBookMenu = menu();
+	SetTitle(&viewSelectedBookMenu, "Selected book: " + Book.title);
+	string Description =
+		"\n ISBN code\t: " + to_string(Book.ISBN) +
+		"\n Title\t\t: " + Book.title +
+		"\n Author\t\t: " + Book.author +
+		"\n Genre\t\t: " + Book.genre +
+		"\n Language\t: " + Book.language +
+		"\n Page count\t: " + to_string(Book.pageCount) +
+		"\n Available\t: " + to_string(Book.available) +
+		"\n Borrowed\t: " + to_string(Book.borrowed) +
+		"\n";
+	SetDescription(&viewSelectedBookMenu, Description);
+
+	if (currentUser.permissionLevel >= 0) {
+		AppendNav(&viewSelectedBookMenu, "Borrow book");
+	}
+	if (currentUser.permissionLevel == 1) {
+		AppendNav(&viewSelectedBookMenu, "Edit book details");
+		AppendNav(&viewSelectedBookMenu, "Delete book");
+	}
+	AppendNav(&viewSelectedBookMenu, "Exit", 0);
+}
+
+void initFacilityBookingMenu() {
+	facilityBookingMenu = menu();
+	SetTitle(&facilityBookingMenu, "Facility booking");
+	AppendNav(&facilityBookingMenu, "Create booking");
+	AppendNav(&facilityBookingMenu, "View booking");
+	AppendNav(&facilityBookingMenu, "Exit", 0);
+}
+
+void initManageUsersMenu() {
+	manageUsersMenu = menu();
+	AppendNav(&manageUsersMenu, "Select and view", -1, 'x');
+	AppendNav(&manageUsersMenu, "Exit", 0);
+}
+
+void initManageUserViewMenu(string accountString) {
+	splitByDelimiter(accountString, Delimiter);
+	manageUserViewMenu = menu();
+	SetTitle(&manageUserViewMenu, "Viewing user");
+	SetDescription(&manageUserViewMenu, "Username \t\t: " + SplitString[0] + "\nPermission level \t: " + SplitString[2] + "\n");
+	AppendNav(&manageUserViewMenu, "Change Username");
+	AppendNav(&manageUserViewMenu, "Change Password");
+	if (currentUser.permissionLevel == 1)
+		AppendNav(&manageUserViewMenu, "Modify permission level");
+	AppendNav(&manageUserViewMenu, "Remove account", 4);
+	AppendNav(&manageUserViewMenu, "Exit", 0);
+}
+
+//----------------------------------------------------------------------------------------------------------
