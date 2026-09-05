@@ -104,6 +104,9 @@ struct book {
 	int available = -1; //how many available to borrow
 	int borrowed = -1; //how many currently borrowed
 };
+static bool hasOnlyInt(string str);
+static bool containsChar(string str, char character);
+constexpr int digitsLength(long long int x);
 
 void addBook();
 void removeBookFunction();
@@ -140,6 +143,7 @@ bool checkIfBorrowed(long long int ISBN);
 int countBorrows(long long int ISBN);
 void borrowNewBook(long long int ISBN);
 void returnBook(long long int ISBN);
+void removeBookFromBorrow(long long int ISBN);
 void changeBorrowUsername(string oldUsername, string currentUsername);
 
 void appendNewAccount(string username, string password);
@@ -259,7 +263,7 @@ int main() {
 	cin.ignore(numeric_limits<streamsize>::max(), '\n');
 	
 	bool exitProgram = false;
-	// FIX BUFFER KEEPING WRITTEN TEXT AND MOVING IT TO LOGIN
+	
 	while (!exitProgram) {
 		DisplayPage(&Menu_Main);
 		switch (listenForInt()) {
@@ -412,7 +416,7 @@ string getValidPassword() {
 }
 
 void registerFunction() {
-	if (!promptYesNo("Continue to registration? [y/n]\n")) {
+	if (!promptYesNo("Continue to registration? [Y/N]\n")) {
 		return;
 	}
 	system("cls");
@@ -424,7 +428,7 @@ void registerFunction() {
 }
 
 void loginFunction() {
-	if (!promptYesNo("Continue to login? [y/n]\n")) {
+	if (!promptYesNo("Continue to login? [Y/N]\n")) {
 		currentUser = account();
 		return;
 	}
@@ -762,9 +766,9 @@ static bool hasOnlyInt(string str) {
 	return true;
 }
 
-static bool containsDelimiter(string str) {
+static bool containsChar(string str, char character) {
 	for (int i = 0; i < str.length(); i++) {
-		if (str[i] == '|') {
+		if (str[i] == character) {
 			return true;
 		}
 	}
@@ -792,7 +796,8 @@ constexpr int digitsLength(long long int x) { // its either this or conversion t
 
 void addBook() {
 	book newBook;
-
+	if (!promptYesNo("Add a new book? [Y/N]"))
+		return;
 	do {
 		cout << "Enter book ISBN: ";
 		long long int ISBN = getLLNumber();
@@ -806,7 +811,7 @@ void addBook() {
 	do {
 		cout << "Enter book title: ";
 		string TITLE = listenForString();
-		if (containsDelimiter(TITLE)) {
+		if (containsChar(TITLE, '|')) {
 			cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
 			continue;
 		}
@@ -817,7 +822,7 @@ void addBook() {
 	do {
 		cout << "Enter book genre: ";
 		string GENRE = listenForString();
-		if (containsDelimiter(GENRE)) {
+		if (containsChar(GENRE, '|')) {
 			cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
 			continue;
 		}
@@ -827,7 +832,7 @@ void addBook() {
 	do {
 		cout << "Enter book author: ";
 		string AUTHOR = listenForString();
-		if (containsDelimiter(AUTHOR)) {
+		if (containsChar(AUTHOR, '|')) {
 			cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
 			continue;
 		}
@@ -837,7 +842,7 @@ void addBook() {
 	do {
 		cout << "Enter book language: ";
 		string LANGUAGE = listenForString();
-		if (containsDelimiter(LANGUAGE)) {
+		if (containsChar(LANGUAGE, '|')) {
 			cout << "ILLEGAL CHARACTER, system does not allow usage of \'|\' (delimiter)" << endl;
 			continue;
 		}
@@ -847,7 +852,7 @@ void addBook() {
 	do {
 		cout << "Enter number of pages: ";
 		int PAGECOUNT = getINTNumber();
-		if (PAGECOUNT == -1) {
+		if (PAGECOUNT == -1 || PAGECOUNT < 1) {
 			cout << "INVALID PAGECOUNT, PAGECOUNT cannot be zero, contain, negative, decimal or non numeric values." << endl;
 			continue;
 		}
@@ -857,7 +862,7 @@ void addBook() {
 	do {
 		cout << "Enter available amount of book: ";
 		int AVAILABLE = getINTNumber();
-		if (AVAILABLE == -1) {
+		if (AVAILABLE == -1 || AVAILABLE < 1) {
 			cout << "INVALID AVAILABLE, AVAILABLE cannot be zero, contain, negative, decimal or non numeric values." << endl;
 			continue;
 		}
@@ -871,11 +876,13 @@ void addBook() {
 };
 
 void removeBookFunction() {
+	if (!promptYesNo(" Remove a book? [Y/N]"))
+		return;
 	cout << "Enter ISBN of book to remove: ";
 	if (removeBook(getLLNumber()))
-		cout << "Removal of book successful.";
+		cout << "Removal of book successful." << endl;
 	else
-		cout << "Could not remove book.";
+		cout << "Could not remove book." << endl;
 		
 }
 
@@ -914,7 +921,7 @@ void editBook(book *Book) {
 			cout << "Invalid Value! Value can only have numeric values." << endl;
 		}
 
-		if (containsDelimiter(value)) {
+		if (containsChar(value, '|')) {
 			value = "";
 			cout << "Invalid Value! Value cannot contain delimiter." << endl;
 		}
@@ -1116,13 +1123,13 @@ bookProperty selectBookProperty() {
 		<< "[4] Genre" << endl
 		<< "[5] Language" << endl
 		<< "[6] Page Count" << endl;
-	int num;
-	while (true) {
+	int num = 0;
+	while (num == 0) {
 		num = listenForInt();
 		if (num > 6 || num < 1) {
+			num = 0;
 			continue;
 		}
-		break;
 	}
 
 	return bookProperty(num - 1);
@@ -1160,13 +1167,24 @@ void viewSelectBook(book currentSelectedBook) {
 		switch (listenForInt()) {
 		case 1:
 			if (currentUser.permissionLevel >= 0) {
+				if (currentSelectedBook.available < 1) {
+					cout << "There is no available copies of this book to borrow." << endl;
+					cin.ignore(numeric_limits<streamsize>::max(), '\n');
+					break;
+				}
+
 				if (!checkIfBorrowed(currentSelectedBook.ISBN)) {
 					borrowNewBook(currentSelectedBook.ISBN);
 					cout << "Sucessfully borrowed book.";
 					modifyBook(&currentSelectedBook, Borrowed, to_string(currentSelectedBook.borrowed + 1));
+					modifyBook(&currentSelectedBook, Available, to_string(currentSelectedBook.available - 1));
 				}
-				else
+				else {
 					cout << "You are already borrowing this book." << endl;
+					cin.ignore(numeric_limits<streamsize>::max(), '\n');
+					break;
+				}
+					
 				cin.ignore(numeric_limits<streamsize>::max(), '\n');
 			}
 			break;
@@ -1174,6 +1192,7 @@ void viewSelectBook(book currentSelectedBook) {
 			if (checkIfBorrowed(currentSelectedBook.ISBN)) {
 				returnBook(currentSelectedBook.ISBN);
 				modifyBook(&currentSelectedBook, Borrowed, to_string(currentSelectedBook.borrowed - 1));
+				modifyBook(&currentSelectedBook, Available, to_string(currentSelectedBook.available + 1));
 			}
 			break;
 		case 3:
@@ -1395,7 +1414,6 @@ void loadORinitializeDateFile(date Date) {
 }
 
 void addBooking(date Date, int skipOffset, int startTime, int endTime) {
-	cout << "Booking time range" << startTime << " - " << endTime << endl;
 	string FileName = to_string(Date.day) + ".txt";
 	fs::path FilePath = BOOKINGS_PATH / (to_string(currentYear)) / Months[Date.month - 1] / FileName;
 	ofstream newBooking;
@@ -1417,7 +1435,6 @@ void addBooking(date Date, int skipOffset, int startTime, int endTime) {
 	int index = 0;
 	while (getline(dateFile, line)) {
 		if (index == skipOffset) {
-			cout << line << endl;
 			for (int k = 0; k < line.length(); k++)
 				if (k >= startTime && k <= endTime)
 					line[k] = '1';
@@ -1512,8 +1529,8 @@ bool removeBook(long long int ISBN) { //remove line with the matched ISBN
 		splitByDelimiter(line, BookDelimiter);
 		if (stoll(SplitString[0]) != ISBN) {
 			newBooks << line << endl;
+		} else
 			removed = true;
-		}
 	}
 
 	newBooks.close();
@@ -1521,6 +1538,8 @@ bool removeBook(long long int ISBN) { //remove line with the matched ISBN
 
 	remove(BOOKS_PATH);
 	rename("temp.txt", BOOKS_PATH);
+
+	removeBookFromBorrow(ISBN);
 	return removed;
 }
 
@@ -1627,6 +1646,23 @@ void returnBook(long long int ISBN) {
 	while (getline(borrows, line)) {
 		splitByDelimiter(line, BookDelimiter);
 		if (SplitString[0] != to_string(ISBN) && SplitString[1] != currentUser.username)
+			newBorrows << line << endl;
+	}
+
+	borrows.close();
+	newBorrows.close();
+	remove(BORROWS_PATH);
+	rename("temp.txt", BORROWS_PATH);
+}
+
+void removeBookFromBorrow(long long int ISBN) { //could just use add an argument to returnBook to delete all instances but it would be dangerous
+	ifstream borrows(BORROWS_PATH, ios_base::in);
+	ofstream newBorrows("temp.txt");
+
+	string line;
+	while (getline(borrows, line)) {
+		splitByDelimiter(line, BookDelimiter);
+		if (SplitString[0] != to_string(ISBN))
 			newBorrows << line << endl;
 	}
 
@@ -2020,6 +2056,7 @@ void selectViewAccount(string username) {
 			string newUsername = getValidUsername();
 			changeBorrowUsername(currentUser.username, newUsername);
 			modifyAccountsFile(username, _username, newUsername, false);
+			username = newUsername;
 			actionMade = true;
 			break;
 		}
@@ -2114,13 +2151,15 @@ static int keyToInt(int key) { //usage of maps (dictionary) is not allowed
 }
 
 int listenForInt() {
-	while (true) {
-		char key = _getch();
+	char key; bool gotKey = false;
+	while (!gotKey) {
+		key = _getch();
 		if (keyToInt((int)key) != -1) {
-			cin.clear();
-			return keyToInt(key);
+			gotKey = true;
 		}
 	}
+	cin.clear();
+	return keyToInt(key);
 }
 
 char listenForChar() {
@@ -2129,7 +2168,10 @@ char listenForChar() {
 
 int getINTNumber() {
 	try {
-		return stoi(listenForString());
+		string str = listenForString();
+		if (!hasOnlyInt(str))
+			return -1;
+		return stoi(str);
 	}
 	catch (...) {
 		return -1;
@@ -2153,19 +2195,20 @@ string listenForString() {
 }
 
 bool promptYesNo(string message) {
-	char letter;
+	char letter = 'x';
 	cout << message;
-	while (true) {
+	while (letter != 'y' && letter != 'n') {
 		letter = listenForChar();
-		if (letter == 'y') {
-			cin.clear();
-			return true;
-		}
-		else if (letter == 'n') {
-			cin.clear();
-			return false;
-		}
 	}
+	if (letter == 'y') {
+		cin.clear();
+		return true;
+	}
+	else {
+		cin.clear();
+		return false;
+	}
+
 }
 
 //----------------------------------------------------------------------------------------------------------
@@ -2296,8 +2339,8 @@ void initViewSelectedBookMenu(book Book) {
 		AppendNav(&viewSelectedBookMenu, "Return book");
 	}
 	if (currentUser.permissionLevel == 1) {
-		AppendNav(&viewSelectedBookMenu, "Edit book details");
-		AppendNav(&viewSelectedBookMenu, "Delete book");
+		AppendNav(&viewSelectedBookMenu, "Edit book details", 3);
+		AppendNav(&viewSelectedBookMenu, "Delete book", 4);
 	}
 	AppendNav(&viewSelectedBookMenu, "Exit", 0);
 }
@@ -2367,7 +2410,7 @@ void createNewFeedback() {
 	while (!validFeedback) {
 		feedback = listenForString();
 		validFeedback = true;
-		if (containsDelimiter(feedback)) {
+		if (containsChar(feedback, '|')) {
 			validFeedback = false;
 			cout << "Feedback cannot contain the character \"|\"" << endl;
 		}
