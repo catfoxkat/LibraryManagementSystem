@@ -419,11 +419,11 @@ void registerFunction() {
 	if (!promptYesNo("Continue to registration? [Y/N]\n")) {
 		return;
 	}
-	system("cls");
+	system("CLS");
 
 	string username = getValidUsername(), password = getValidPassword();
 	
-	cout << "REGISTER ACCOUNT WITH USERNAME OF " << username << " AND PASSWORD OF " << password << endl;
+	//cout << "REGISTER ACCOUNT WITH USERNAME OF " << username << " AND PASSWORD OF " << password << endl;
 	appendNewAccount(username, password);
 }
 
@@ -433,7 +433,7 @@ void loginFunction() {
 		return;
 	}
 
-	system("cls");
+	system("CLS");
 
 	cout << "Input username\n";
 	string username = listenForString();
@@ -441,14 +441,13 @@ void loginFunction() {
 	cout << "Input password\n";
 	string password = listenForString();
 
-	cout << "LOGIN WITH USERNAME OF " << username << " AND PASSWORD OF " << password << endl;
+	//cout << "LOGIN WITH USERNAME OF " << username << " AND PASSWORD OF " << password << endl;
 	if (validateAccount(username, password)) {
-		cout << "LOGIN SUCCESS." << endl;
 		currentUser = getAccountByName(username);
 		return;
 	}
 	else {
-		cout << "INVALID USERNAME OR PASSWORD" << endl;
+		cout << "Invalid username or password." << endl;
 		loginFunction();
 	}
 }
@@ -796,7 +795,7 @@ constexpr int digitsLength(long long int x) { // its either this or conversion t
 
 void addBook() {
 	book newBook;
-	if (!promptYesNo("Add a new book? [Y/N]"))
+	if (!promptYesNo("Add a new book? [Y/N]\n"))
 		return;
 	do {
 		cout << "Enter book ISBN: ";
@@ -2237,7 +2236,7 @@ void AppendNav(menu* Menu, string navText, int overwriteIndex, char overwriteCha
 
 void DisplayPage(menu* Menu, bool clearScreen) {
 	if (clearScreen) {
-		system("cls");
+		system("CLS");
 	}
 	cout << Menu->PageTitle << endl << Menu->PageDesc << endl << Menu->PageNav << endl;
 }
