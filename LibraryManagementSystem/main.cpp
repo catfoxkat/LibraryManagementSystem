@@ -2142,12 +2142,9 @@ static int keyToInt(int key) { //usage of maps (dictionary) is not allowed
 }
 
 int listenForInt() {
-	char key; bool gotKey = false;
-	while (!gotKey) {
+	char key = _getch();
+	while (keyToInt((int)key) == -1) {
 		key = _getch();
-		if (keyToInt((int)key) != -1) {
-			gotKey = true;
-		}
 	}
 	cin.clear();
 	return keyToInt(key);
