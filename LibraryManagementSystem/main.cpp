@@ -68,7 +68,7 @@ void loginFunction();
 const int currentDay = stoi(format("{:%d}", chrono::system_clock::now()));
 const int currentMonth = stoi(format("{:%m}", chrono::system_clock::now()));
 const int currentYear = stoi(format("{:%Y}", chrono::system_clock::now()));
-const string Months[12] = { "Janaury", "Febuary", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" }; //used in file structure
+const string Months[12] = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" }; //used in file structure
 
 const string facilityTypes[3] = { "Discussion room", "Study room", "Computer lab" };
 const int facilityTypesMaxPax[3] = { 6, 2, 10 }; // max occupancy per room
@@ -111,7 +111,7 @@ constexpr int digitsLength(long long int x);
 
 void addBook();
 void removeBookFunction();
-void editBook(book *Book);
+void editBook(book* Book);
 void bookInterface();
 void bookSearchSubInterface();
 void displayAllBooks(bool sort = false, bookProperty BookProperty = ISBN, int selectionIndex = -1);
@@ -877,7 +877,7 @@ void removeBookFunction() {
 		
 }
 
-void editBook(book *Book) {
+void editBook(book* Book) {
 	cout << "Select data to modify" << endl
 		<< "[1] ISBN" << endl
 		<< "[2] Title" << endl
