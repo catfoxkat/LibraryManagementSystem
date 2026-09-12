@@ -88,6 +88,7 @@ struct date {
 int getMonthMaxDate(int month);
 bool stringToDate(string str, date* Date);
 void facilityBookingInterface();
+void displaySchedule(int skipOffset, int endRoomIndex);
 void createBooking();
 void viewBooking();
 
@@ -532,6 +533,26 @@ void facilityBookingInterface() {
 	}
 }
 
+void displaySchedule(int skipOffset, int endRoomIndex) {
+	cout << "[ROOM] [HOUR ";
+	for (int i = 0; i < bookingHourEnd - bookingHourStart + 1; i++) {
+		cout << setw(3) << to_string(i + bookingHourStart);
+	}
+	cout << "]" << endl;
+
+	int index = 1;
+	for (int i = skipOffset; i < endRoomIndex; i++) {
+		cout << " " << setw(4) << left << to_string(index++) << " " << "|" << setw(6) << " ";
+		for (int k = 0; k < bookingHourEnd - bookingHourStart + 1; k++) {
+			if (loadedFacilityScheduleFile[i][k]) {
+				cout << setw(3) << right << "x";
+			}
+			else cout << setw(3) << right << "-";
+		}
+		cout << endl;
+	}
+}
+
 void createBooking() {
 	system("CLS");
 
@@ -633,23 +654,9 @@ void createBooking() {
 			cout << "-> Selected facility type \t: " << facilityTypes[chosenType - 1] << endl;
 			cout << "-> Number of persons \t\t: " << bookingPersonsAmount << endl;
 			cout << "-> Selected date \t\t: " << Date.day << "/" << Date.month << "/" << Date.year << endl << endl;
-			cout << "[ROOM] [HOUR ";
-			for (int i = 0; i < bookingHourEnd - bookingHourStart + 1; i++) {
-				cout << setw(3) << to_string(i + bookingHourStart);
-			}
-			cout << "]" << endl;
+			
+			displaySchedule(skipOffset, endRoomIndex);
 
-			int index = 1;
-			for (int i = skipOffset; i < endRoomIndex; i++) {
-				cout << " " << setw(4) << left << to_string(index++) << " " << "|" << setw(6) << " ";
-				for (int k = 0; k < bookingHourEnd - bookingHourStart + 1; k++) {
-					if (loadedFacilityScheduleFile[i][k]) {
-						cout << setw(3) << right << "x";
-					}
-					else cout << setw(3) << right << "-";
-				}
-				cout << endl;
-			}
 			cout << endl << "Select a room: ";
 			int thisRoomSelection = getINTNumber();
 			if (thisRoomSelection > 0 && thisRoomSelection <= facilityTypeRoomAmount[chosenType - 1])
@@ -683,6 +690,7 @@ void createBooking() {
 		addBooking(Date, skipOffset + roomSelection - 1, startTime - bookingHourStart, endTime - bookingHourStart);
 		finishTimeSelection = true;
 	}
+	cout << "Booking successful.";
 }
 
 void viewBooking() {
@@ -736,23 +744,7 @@ void viewBooking() {
 	system("CLS");
 	cout << "-> Selected facility type \t: " << facilityTypes[chosenType - 1] << endl;
 	cout << "-> Selected date \t\t: " << Date.day << "/" << Date.month << "/" << Date.year << endl << endl;
-	cout << "[ROOM] [HOUR ";
-	for (int i = 0; i < bookingHourEnd - bookingHourStart + 1; i++) {
-		cout << setw(3) << to_string(i + bookingHourStart);
-	}
-	cout << "]" << endl;
-
-	int index = 1;
-	for (int i = skipOffset; i < endRoomIndex; i++) {
-		cout << " " << setw(4) << left << to_string(index++) << " " << "|" << setw(6) << " ";
-		for (int k = 0; k < bookingHourEnd - bookingHourStart + 1; k++) {
-			if (loadedFacilityScheduleFile[i][k]) {
-				cout << setw(3) << right << "x";
-			}
-			else cout << setw(3) << right << "-";
-		}
-		cout << endl;
-	}
+	displaySchedule(skipOffset, endRoomIndex);
 }
 //----------------------------------------------------------------------------------------------------------
 
@@ -1644,7 +1636,7 @@ void returnBook(long long int ISBN) {
 	string line;
 	while (getline(borrows, line)) {
 		splitByDelimiter(line, BookDelimiter);
-		if (SplitString[0] != to_string(ISBN) && SplitString[1] != currentUser.username)
+		if (!(SplitString[0] == to_string(ISBN) && SplitString[1] == currentUser.username))
 			newBorrows << line << endl;
 	}
 
