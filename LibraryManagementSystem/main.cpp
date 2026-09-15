@@ -54,7 +54,7 @@ void LoggedIn();
 
 struct account {
 	string username;
-	int permissionLevel = 0; //-1 guest, 0 user, 1 staff
+	int permissionLevel = -1; //-1 guest, 0 user, 1 staff
 	bool exists = false;
 };
 
@@ -257,7 +257,6 @@ int main() {
 	initializeFiles();
 	initializeBookingFileStructure();
 	initMenu_Main();
-	initFacilityBookingMenu();
 	initManageUsersMenu();
 
 
@@ -298,6 +297,7 @@ void LoggedIn() {
 	initBookSearchMenu();
 	initBookMenu();
 	initDisplayBookMenu();
+	initFacilityBookingMenu();
 	initFeedbackMenu();
 
 	bool exitMenu_Main = false;
@@ -316,10 +316,8 @@ void LoggedIn() {
 			bookInterface();
 			break;
 		case 2:
-			if (currentUser.permissionLevel >= 0) {
-				//cout << "FACILITY BOOKING";
-				facilityBookingInterface();
-			}
+			//cout << "FACILITY BOOKING";
+			facilityBookingInterface();
 			break;
 		case 3:
 			if (currentUser.permissionLevel >= 0) {
@@ -511,6 +509,7 @@ void facilityBookingInterface() {
 	while (!exit) {
 		switch (listenForInt()) {
 		case 1: {
+			if (currentUser.permissionLevel == -1) break;
 			createBooking();
 			cout << "Press Enter to return...";
 			cin.ignore(numeric_limits<streamsize>::max(), '\n');
@@ -545,7 +544,7 @@ void displaySchedule(int skipOffset, int endRoomIndex) {
 		cout << " " << setw(4) << left << to_string(index++) << " " << "|" << setw(6) << " ";
 		for (int k = 0; k < bookingHourEnd - bookingHourStart + 1; k++) {
 			if (loadedFacilityScheduleFile[i][k]) {
-				cout << setw(3) << right << "x";
+				cout << setw(3) << right << char(254);
 			}
 			else cout << setw(3) << right << "-";
 		}
@@ -1856,7 +1855,7 @@ void countGenre() { //should separate into more functions as it takes too much m
 	while (getline(books, line)) {
 		splitByDelimiter(line, BookDelimiter);
 
-		genre = SplitString[2];
+		genre = SplitString[3];
 
 		bool found = false;
 
@@ -2264,8 +2263,8 @@ void initMenu_Main_Logged() {
 	SetDescription(&Menu_Main_Logged, "Permission level: " + to_string(currentUser.permissionLevel) + " (" + accountType + ")\n");
 
 	AppendNav(&Menu_Main_Logged, "Browse books");
+	AppendNav(&Menu_Main_Logged, "Facility booking");
 	if (currentUser.permissionLevel >= 0) {
-		AppendNav(&Menu_Main_Logged, "Facility booking");
 		AppendNav(&Menu_Main_Logged, "Feedback");
 	}
 	if (currentUser.permissionLevel == 1) {
@@ -2336,8 +2335,9 @@ void initViewSelectedBookMenu(book Book) {
 void initFacilityBookingMenu() {
 	facilityBookingMenu = menu();
 	SetTitle(&facilityBookingMenu, "Facility booking");
-	AppendNav(&facilityBookingMenu, "Create booking");
-	AppendNav(&facilityBookingMenu, "View booking");
+	if (currentUser.permissionLevel >= 0) 
+		AppendNav(&facilityBookingMenu, "Create booking");
+	AppendNav(&facilityBookingMenu, "View booking", 2);
 	AppendNav(&facilityBookingMenu, "Exit", 0);
 }
 
